@@ -8,3 +8,4 @@ function(picpp_add_test name src)
 endfunction()
 
 picpp_add_test(test_smoke "${CMAKE_CURRENT_SOURCE_DIR}/test_smoke.cpp")
+picpp_add_test(test_string "${CMAKE_CURRENT_SOURCE_DIR}/util/test_string.cpp")
