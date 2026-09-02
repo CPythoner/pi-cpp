@@ -9,3 +9,4 @@ endfunction()
 
 picpp_add_test(test_smoke "${CMAKE_CURRENT_SOURCE_DIR}/test_smoke.cpp")
 picpp_add_test(test_string "${CMAKE_CURRENT_SOURCE_DIR}/util/test_string.cpp")
+picpp_add_test(test_cancel_token "${CMAKE_CURRENT_SOURCE_DIR}/util/test_cancel_token.cpp")
