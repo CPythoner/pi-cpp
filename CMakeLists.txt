@@ -25,7 +25,9 @@ target_include_directories(pi_types INTERFACE
     "${CMAKE_CURRENT_SOURCE_DIR}/src"
     "${CMAKE_CURRENT_BINARY_DIR}/generated"
 )
-target_link_libraries(pi_types INTERFACE nlohmann::nlohmann_json)
+# 注：FetchContent 引入的 nlohmann/json 构建树目标名为 nlohmann_json
+# （命名空间形式 nlohmann::nlohmann_json 仅存在于 find_package CONFIG 模式）
+target_link_libraries(pi_types INTERFACE nlohmann_json)
 
 add_executable(picpp src/cli/main.cpp)
 target_link_libraries(picpp PRIVATE pi_types fmt::fmt)
