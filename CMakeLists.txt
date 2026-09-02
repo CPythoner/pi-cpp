@@ -19,9 +19,11 @@ endif()
 # 生成的 version.h（含 project 版本号）
 configure_file(cmake/version.h.in "${CMAKE_CURRENT_BINARY_DIR}/generated/version.h" @ONLY)
 
-# 类型/基础设施库（v0.0.1 阶段源列表暂空，故先用 INTERFACE；T4 起填充源码后转 STATIC）
-add_library(pi_types INTERFACE)
-target_include_directories(pi_types INTERFACE
+# 类型/基础设施库（util+agent 源文件；T4 起填充）
+add_library(pi_types STATIC
+    src/util/string.cpp
+)
+target_include_directories(pi_types PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/src"
     "${CMAKE_CURRENT_BINARY_DIR}/generated"
 )
