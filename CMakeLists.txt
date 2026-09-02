@@ -25,9 +25,10 @@ target_include_directories(pi_types INTERFACE
     "${CMAKE_CURRENT_SOURCE_DIR}/src"
     "${CMAKE_CURRENT_BINARY_DIR}/generated"
 )
+target_link_libraries(pi_types INTERFACE nlohmann::nlohmann_json)
 
 add_executable(picpp src/cli/main.cpp)
-target_link_libraries(picpp PRIVATE pi_types)
+target_link_libraries(picpp PRIVATE pi_types fmt::fmt)
 
 enable_testing()
 add_subdirectory(tests)
