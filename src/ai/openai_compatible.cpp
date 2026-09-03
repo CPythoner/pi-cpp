@@ -131,9 +131,13 @@ void OpenAiChatCompletionsDecoder::processChunk(const nlohmann::json& chunk) {
 
 void OpenAiChatCompletionsDecoder::processDelta(const nlohmann::json& delta) {
     if (const auto content = stringValue(delta, "content"); content && !content->empty()) {
+        const bool blockStarted = textIndex_.has_value();
         const auto index = ensureTextBlock();
         auto& block = std::get<TextContent>(output_.content[index]);
         block.text += *content;
+        if (!blockStarted) {
+            stream_.push(EvTextStart{index, output_});
+        }
         stream_.push(EvTextDelta{index, *content, output_});
     }
 
@@ -152,9 +156,13 @@ void OpenAiChatCompletionsDecoder::processDelta(const nlohmann::json& delta) {
             signature = "reasoning_content";
         }
 
+        const bool blockStarted = thinkingIndex_.has_value();
         const auto index = ensureThinkingBlock(std::move(signature));
         auto& block = std::get<ThinkingContent>(output_.content[index]);
         block.thinking += *reasoning;
+        if (!blockStarted) {
+            stream_.push(EvThinkingStart{index, output_});
+        }
         stream_.push(EvThinkingDelta{index, *reasoning, output_});
         break;
     }
@@ -280,7 +288,6 @@ std::size_t OpenAiChatCompletionsDecoder::ensureTextBlock() {
 
     output_.content.emplace_back(TextContent{});
     textIndex_ = output_.content.size() - 1;
-    stream_.push(EvTextStart{*textIndex_, output_});
     return *textIndex_;
 }
 
@@ -291,7 +298,6 @@ std::size_t OpenAiChatCompletionsDecoder::ensureThinkingBlock(std::string signat
     block.thinkingSignature = std::move(signature);
     output_.content.emplace_back(std::move(block));
     thinkingIndex_ = output_.content.size() - 1;
-    stream_.push(EvThinkingStart{*thinkingIndex_, output_});
     return *thinkingIndex_;
 }
 
