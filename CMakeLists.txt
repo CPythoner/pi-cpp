@@ -26,6 +26,7 @@ add_library(pi_ai STATIC
     src/ai/openai_compatible.cpp
     src/ai/openai_provider.cpp
     src/ai/http.cpp
+    src/ai/retry.cpp
     src/util/string.cpp
 )
 add_library(pi::ai ALIAS pi_ai)
