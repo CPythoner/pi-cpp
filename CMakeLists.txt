@@ -24,6 +24,7 @@ add_library(pi_ai STATIC
     src/ai/sse_parser.cpp
     src/ai/openai_request.cpp
     src/ai/openai_compatible.cpp
+    src/ai/http.cpp
     src/util/string.cpp
 )
 add_library(pi::ai ALIAS pi_ai)
@@ -33,7 +34,10 @@ target_include_directories(pi_ai
     PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/src"
 )
-target_link_libraries(pi_ai PUBLIC nlohmann_json)
+target_link_libraries(pi_ai
+    PUBLIC nlohmann_json
+    PRIVATE cpr::cpr
+)
 
 # agent SDK：AgentMessage、L2 AgentEvent；v0.0.3 起加入 Agent/runLoop/tool abstraction。
 add_library(pi_agent STATIC
