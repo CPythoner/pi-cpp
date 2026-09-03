@@ -182,7 +182,9 @@ void OpenAiChatCompletionsDecoder::processToolCalls(const nlohmann::json& toolCa
     for (const auto& toolCallDelta : toolCalls) {
         if (!toolCallDelta.is_object()) continue;
 
+        const auto stateCountBefore = toolStates_.size();
         auto& state = ensureToolState(toolCallDelta);
+        const bool blockStarted = toolStates_.size() == stateCountBefore;
         auto& block = std::get<ToolCall>(output_.content[state.contentIndex]);
 
         std::string argumentDelta;
@@ -211,6 +213,9 @@ void OpenAiChatCompletionsDecoder::processToolCalls(const nlohmann::json& toolCa
             }
         }
 
+        if (!blockStarted) {
+            stream_.push(EvToolCallStart{state.contentIndex, output_});
+        }
         stream_.push(EvToolCallDelta{state.contentIndex, argumentDelta, output_});
     }
 }
@@ -340,8 +345,6 @@ OpenAiChatCompletionsDecoder::ToolState& OpenAiChatCompletionsDecoder::ensureToo
 
         if (streamIndex) toolByStreamIndex_[*streamIndex] = *contentIndex;
         if (id && !id->empty()) toolById_[*id] = *contentIndex;
-
-        stream_.push(EvToolCallStart{*contentIndex, output_});
     }
 
     auto& state = toolStates_.at(*contentIndex);
