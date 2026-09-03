@@ -109,10 +109,43 @@ std::string httpFailureMessage(const HttpResponse& response) {
     return message;
 }
 
+void failFromResponse(
+    const std::shared_ptr<OpenAiChatCompletionsDecoder>& decoder,
+    const HttpResponse& response) {
+    if (response.errorKind == HttpErrorKind::Cancelled) {
+        decoder->fail("Request was aborted", StopReason::Aborted);
+        return;
+    }
+    if (response.errorKind == HttpErrorKind::Transport) {
+        decoder->fail(
+            response.errorMessage.empty()
+                ? "HTTP transport failed"
+                : "HTTP transport failed: " + response.errorMessage);
+        return;
+    }
+    if (response.errorKind == HttpErrorKind::ConsumerAborted) {
+        decoder->fail("HTTP stream consumer aborted");
+        return;
+    }
+    if (response.status < 200 || response.status >= 300) {
+        decoder->fail(httpFailureMessage(response));
+        return;
+    }
+
+    // A successful HTTP response exists even if the server produced no body
+    // chunks. In that case pi emits start before the terminal protocol error for
+    // the missing finish_reason.
+    decoder->start();
+    decoder->finish();
+}
+
 } // namespace
 
-OpenAIProviderCore::OpenAIProviderCore(std::shared_ptr<HttpTransport> transport)
-    : transport_(std::move(transport)) {}
+OpenAIProviderCore::OpenAIProviderCore(
+    std::shared_ptr<HttpTransport> transport,
+    RetryHooks retryHooks)
+    : transport_(std::move(transport)),
+      retryHooks_(std::move(retryHooks)) {}
 
 AssistantMessageEventStream OpenAIProviderCore::stream(
     const Model& model,
@@ -127,6 +160,7 @@ AssistantMessageEventStream OpenAIProviderCore::stream(
     }
 
     const auto transport = transport_;
+    const auto retryHooks = retryHooks_;
     const auto modelCopy = model;
     const auto contextCopy = context;
     const auto optionsCopy = options;
@@ -135,6 +169,7 @@ AssistantMessageEventStream OpenAIProviderCore::stream(
         std::thread([
             decoder,
             transport,
+            retryHooks,
             modelCopy,
             contextCopy,
             optionsCopy]() mutable {
@@ -163,40 +198,57 @@ AssistantMessageEventStream OpenAIProviderCore::stream(
                     request.connectTimeout = *request.timeout;
                 }
 
-                const auto response = transport->postStream(
-                    request,
-                    [decoder](std::string_view chunk) {
-                        decoder->feed(chunk);
-                        return !decoder->terminal();
-                    });
+                const std::size_t maxRetries = optionsCopy.maxRetries.value_or(0);
+                const auto maxRetryDelay = optionsCopy.maxRetryDelay.value_or(
+                    std::chrono::seconds{60});
+                std::size_t retriesPerformed = 0;
 
-                if (decoder->terminal()) return;
+                for (;;) {
+                    const auto response = transport->postStream(
+                        request,
+                        [decoder](std::string_view chunk) {
+                            decoder->feed(chunk);
+                            return !decoder->terminal();
+                        });
 
-                if (response.errorKind == HttpErrorKind::Cancelled) {
-                    decoder->fail("Request was aborted", StopReason::Aborted);
-                    return;
-                }
-                if (response.errorKind == HttpErrorKind::Transport) {
-                    decoder->fail(
-                        response.errorMessage.empty()
-                            ? "HTTP transport failed"
-                            : "HTTP transport failed: " + response.errorMessage);
-                    return;
-                }
-                if (response.errorKind == HttpErrorKind::ConsumerAborted) {
-                    decoder->fail("HTTP stream consumer aborted");
-                    return;
-                }
-                if (response.status < 200 || response.status >= 300) {
-                    decoder->fail(httpFailureMessage(response));
-                    return;
-                }
+                    if (decoder->terminal()) return;
 
-                // A successful HTTP response exists even if the server produced
-                // no body chunks. In that case pi emits start before the terminal
-                // protocol error for the missing finish_reason.
-                decoder->start();
-                decoder->finish();
+                    const auto now = retryHooks.now
+                        ? retryHooks.now()
+                        : RetryHooks::Clock::now();
+                    const auto randomUnit = retryHooks.randomUnit
+                        ? retryHooks.randomUnit()
+                        : 0.0;
+                    const auto retry = makeRetryDecision(
+                        response,
+                        decoder->started(),
+                        retriesPerformed,
+                        maxRetries,
+                        maxRetryDelay,
+                        now,
+                        randomUnit);
+
+                    if (retry.rejectionMessage) {
+                        decoder->fail(*retry.rejectionMessage);
+                        return;
+                    }
+
+                    if (retry.retry) {
+                        const bool waited = retryHooks.sleep
+                            ? retryHooks.sleep(retry.delay, optionsCopy.cancellation)
+                            : !optionsCopy.cancellation ||
+                                  !optionsCopy.cancellation->wait_for(retry.delay);
+                        if (!waited) {
+                            decoder->fail("Request was aborted", StopReason::Aborted);
+                            return;
+                        }
+                        ++retriesPerformed;
+                        continue;
+                    }
+
+                    failFromResponse(decoder, response);
+                    return;
+                }
             } catch (const std::exception& error) {
                 decoder->fail(error.what());
             } catch (...) {
