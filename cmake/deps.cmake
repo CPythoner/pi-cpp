@@ -8,6 +8,14 @@ set(FMT_TEST OFF CACHE BOOL "")
 set(FMT_DOC OFF CACHE BOOL "")
 set(DOCTEST_WITH_TESTS OFF CACHE BOOL "")
 set(DOCTEST_WITH_EXAMPLES OFF CACHE BOOL "")
+set(CPR_BUILD_TESTS OFF CACHE BOOL "")
+set(CPR_BUILD_TESTS_SSL OFF CACHE BOOL "")
+set(CPR_BUILD_TESTS_PROXY OFF CACHE BOOL "")
+set(CPR_CURL_NOSIGNAL ON CACHE BOOL "")
+set(CPR_USE_SYSTEM_CURL OFF CACHE BOOL "")
+set(CPR_ENABLE_CURL_HTTP_ONLY ON CACHE BOOL "")
+set(CPR_CURL_USE_LIBPSL OFF CACHE BOOL "")
+set(CURL_ZLIB OFF CACHE BOOL "")
 
 # Declare 全部前置 → 统一 MakeAvailable；pin 精确 tag；SYSTEM 隔离依赖警告
 FetchContent_Declare(json
@@ -22,5 +30,9 @@ FetchContent_Declare(doctest
     GIT_REPOSITORY https://github.com/doctest/doctest.git
     GIT_TAG        v2.4.12
     SYSTEM)
+FetchContent_Declare(cpr
+    GIT_REPOSITORY https://github.com/libcpr/cpr.git
+    GIT_TAG        1.14.2
+    SYSTEM)
 
-FetchContent_MakeAvailable(json fmt doctest)
+FetchContent_MakeAvailable(json fmt doctest cpr)
