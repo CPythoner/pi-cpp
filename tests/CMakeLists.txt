@@ -30,6 +30,7 @@ picpp_add_private_test(test_sse_parser "${CMAKE_CURRENT_SOURCE_DIR}/ai/test_sse_
 picpp_add_private_test(test_streaming_json "${CMAKE_CURRENT_SOURCE_DIR}/ai/test_streaming_json.cpp" pi::ai)
 picpp_add_private_test(test_openai_request "${CMAKE_CURRENT_SOURCE_DIR}/ai/test_openai_request.cpp" pi::ai)
 picpp_add_private_test(test_openai_compatible "${CMAKE_CURRENT_SOURCE_DIR}/ai/test_openai_compatible.cpp" pi::ai)
+picpp_add_private_test(test_openai_tool_streaming "${CMAKE_CURRENT_SOURCE_DIR}/ai/test_openai_tool_streaming.cpp" pi::ai)
 picpp_add_private_test(test_openai_provider "${CMAKE_CURRENT_SOURCE_DIR}/ai/test_openai_provider.cpp" pi::ai)
 picpp_add_private_test(test_retry "${CMAKE_CURRENT_SOURCE_DIR}/ai/test_retry.cpp" pi::ai)
 picpp_add_private_test(test_thread_guard "${CMAKE_CURRENT_SOURCE_DIR}/util/test_thread_guard.cpp" pi::ai)
