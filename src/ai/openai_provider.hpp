@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ai/http.hpp"
+#include "ai/retry.hpp"
 
 #include <pi/ai/provider.hpp>
 
@@ -10,7 +11,9 @@ namespace pi::ai::detail {
 
 class OpenAIProviderCore {
 public:
-    explicit OpenAIProviderCore(std::shared_ptr<HttpTransport> transport);
+    explicit OpenAIProviderCore(
+        std::shared_ptr<HttpTransport> transport,
+        RetryHooks retryHooks = defaultRetryHooks());
 
     AssistantMessageEventStream stream(
         const Model& model,
@@ -19,6 +22,7 @@ public:
 
 private:
     std::shared_ptr<HttpTransport> transport_;
+    RetryHooks retryHooks_;
 };
 
 } // namespace pi::ai::detail
