@@ -110,28 +110,39 @@ TEST_CASE("retry decision respects attempts and server requested delay") {
     CHECK_FALSE(exhausted.retry);
 }
 
-TEST_CASE("transport failures retry only before streaming starts") {
+TEST_CASE("transport failures retry only before an HTTP response exists") {
     detail::HttpResponse response;
     response.errorKind = detail::HttpErrorKind::Transport;
 
-    const auto beforeStart = detail::makeRetryDecision(
+    const auto beforeResponse = detail::makeRetryDecision(
         response,
         false,
         0,
         1,
         detail::RetryHooks::Clock::time_point{},
         0.0);
-    CHECK(beforeStart.retry);
-    CHECK_EQ(beforeStart.delay, 500ms);
+    CHECK(beforeResponse.retry);
+    CHECK_EQ(beforeResponse.delay, 500ms);
 
-    const auto afterStart = detail::makeRetryDecision(
+    response.status = 200;
+    const auto bodyFailure = detail::makeRetryDecision(
+        response,
+        false,
+        0,
+        1,
+        detail::RetryHooks::Clock::time_point{},
+        0.0);
+    CHECK_FALSE(bodyFailure.retry);
+
+    response.status = 0;
+    const auto afterStreamStart = detail::makeRetryDecision(
         response,
         true,
         0,
         1,
         detail::RetryHooks::Clock::time_point{},
         0.0);
-    CHECK_FALSE(afterStart.retry);
+    CHECK_FALSE(afterStreamStart.retry);
 
     response.errorKind = detail::HttpErrorKind::Cancelled;
     const auto cancelled = detail::makeRetryDecision(
