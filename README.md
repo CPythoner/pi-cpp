@@ -52,7 +52,7 @@ pi::coding_agent
 | 版本 | 主题 | 状态 |
 |---|---|---|
 | v0.0.1 | 骨架 + 核心类型 + 三层 SDK 边界 | ✅ Final closeout 完成 |
-| v0.0.2 | Provider / SSE + 真实差分测试基座 | 🚧 进行中 — T1 CancellationToken 加固完成 |
+| v0.0.2 | Provider / SSE + 真实差分测试基座 | 🚧 closeout — T0/T1/T2/T3 完成 |
 | v0.0.3 | Agent 主循环 | 待开始 |
 | v0.0.4 | coding-agent 工具四件套 | 待开始 |
 | v0.1.0 | print MVP + Stable Session Wire | 待开始 |
@@ -73,7 +73,7 @@ ctest --preset release
 ./build/release/picpp --version
 ```
 
-当前 `main` 输出：
+当前 `feature/v0.0.2` 分支构建输出：
 
 ```text
 picpp v0.0.2
@@ -84,4 +84,4 @@ picpp v0.0.2
 - CMake ≥ 3.25
 - 支持 C++17 的编译器（GCC / Clang / MSVC）
 
-当前依赖 nlohmann/json、fmt、doctest 由 CMake FetchContent 自动拉取。
+当前通过 CMake FetchContent 拉取 nlohmann/json、fmt、doctest 与 CPR；CPR/libcurl 只作为 `pi::ai` 的 private HTTP 实现依赖，不进入 public SDK API。
