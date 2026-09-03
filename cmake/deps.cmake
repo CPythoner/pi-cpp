@@ -3,6 +3,11 @@ include(FetchContent)
 # CMake 4 兼容：允许声明 cmake_minimum_required < 3.5 的旧依赖（如 doctest）
 set(CMAKE_POLICY_VERSION_MINIMUM "3.5" CACHE STRING "")
 
+# FetchContent dependencies are implementation details of the SDK. Keep them
+# static so an external pi::ai consumer does not inherit private CPR/libcurl
+# runtime DLL deployment requirements on Windows.
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+
 # 关闭依赖自带的测试与示例，避免拖慢构建
 set(FMT_TEST OFF CACHE BOOL "")
 set(FMT_DOC OFF CACHE BOOL "")
