@@ -95,8 +95,3 @@ private:
 };
 
 } // namespace pi::ai
-
-namespace pi {
-using ai::CancellationToken;
-using ai::CombinedCancellation;
-} // namespace pi
