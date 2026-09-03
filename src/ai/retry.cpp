@@ -1,15 +1,15 @@
 #include "ai/retry.hpp"
 
 #include <algorithm>
-#include <charconv>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <limits>
 #include <random>
 #include <sstream>
 #include <string>
 #include <string_view>
-#include <system_error>
 #include <thread>
 
 namespace pi::ai::detail {
@@ -42,6 +42,28 @@ std::optional<std::string_view> headerValue(
         if (lowerAscii(name) == expected) return value;
     }
     return std::nullopt;
+}
+
+std::optional<double> parseNumberPrefix(std::string_view raw) {
+    const auto value = trimAscii(raw);
+    if (value.empty()) return std::nullopt;
+
+    const std::string text(value);
+    char* end = nullptr;
+    const double parsed = std::strtod(text.c_str(), &end);
+    if (end == text.c_str() || !std::isfinite(parsed)) return std::nullopt;
+    return parsed;
+}
+
+std::optional<std::chrono::milliseconds> millisecondsFromDouble(double value) {
+    if (!std::isfinite(value)) return std::nullopt;
+    if (value <= 0.0) return std::chrono::milliseconds{0};
+
+    const auto max = static_cast<double>(std::numeric_limits<std::int64_t>::max());
+    if (value >= max) {
+        return std::chrono::milliseconds{std::numeric_limits<std::int64_t>::max()};
+    }
+    return std::chrono::milliseconds{static_cast<std::int64_t>(value)};
 }
 
 std::optional<unsigned> monthNumber(std::string_view month) {
@@ -129,35 +151,46 @@ RetryHooks defaultRetryHooks() {
 }
 
 bool isRetryableHttpStatus(long status) noexcept {
-    return status == 429 || (status >= 500 && status <= 599);
+    return status == 408 || status == 409 || status == 429 || status >= 500;
 }
 
-std::optional<std::chrono::milliseconds> parseRetryAfter(
+bool shouldRetryHttpResponse(const HttpResponse& response) {
+    if (const auto directive = headerValue(response.headers, "x-should-retry")) {
+        if (*directive == "true") return true;
+        if (*directive == "false") return false;
+    }
+    return isRetryableHttpStatus(response.status);
+}
+
+std::optional<std::chrono::milliseconds> parseRetryDelay(
     const std::map<std::string, std::string>& headers,
     RetryHooks::Clock::time_point now) {
-    const auto raw = headerValue(headers, "retry-after");
-    if (!raw) return std::nullopt;
+    std::optional<std::chrono::milliseconds> retryAfterMilliseconds;
 
-    const auto value = trimAscii(*raw);
-    if (value.empty()) return std::nullopt;
-
-    std::uint64_t seconds = 0;
-    const auto* begin = value.data();
-    const auto* end = value.data() + value.size();
-    const auto parsed = std::from_chars(begin, end, seconds);
-    if (parsed.ec == std::errc{} && parsed.ptr == end) {
-        constexpr auto maxMilliseconds =
-            static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max());
-        if (seconds > maxMilliseconds / 1000) {
-            return std::chrono::milliseconds{std::numeric_limits<std::int64_t>::max()};
+    if (const auto rawMilliseconds = headerValue(headers, "retry-after-ms")) {
+        if (const auto parsed = parseNumberPrefix(*rawMilliseconds)) {
+            retryAfterMilliseconds = millisecondsFromDouble(*parsed);
+            if (retryAfterMilliseconds && retryAfterMilliseconds->count() != 0) {
+                return retryAfterMilliseconds;
+            }
         }
-        return std::chrono::milliseconds{static_cast<std::int64_t>(seconds * 1000)};
     }
 
-    const auto date = parseHttpDate(value);
-    if (!date) return std::nullopt;
-    if (*date <= now) return std::chrono::milliseconds{0};
-    return std::chrono::duration_cast<std::chrono::milliseconds>(*date - now);
+    if (const auto rawRetryAfter = headerValue(headers, "retry-after")) {
+        const auto value = trimAscii(*rawRetryAfter);
+        if (!value.empty()) {
+            if (const auto seconds = parseNumberPrefix(value)) {
+                return millisecondsFromDouble(*seconds * 1000.0);
+            }
+
+            if (const auto date = parseHttpDate(value)) {
+                if (*date <= now) return std::chrono::milliseconds{0};
+                return std::chrono::duration_cast<std::chrono::milliseconds>(*date - now);
+            }
+        }
+    }
+
+    return retryAfterMilliseconds;
 }
 
 std::chrono::milliseconds exponentialBackoffDelay(
@@ -182,7 +215,6 @@ RetryDecision makeRetryDecision(
     bool streamStarted,
     std::size_t retriesAlreadyPerformed,
     std::size_t maxRetries,
-    std::chrono::milliseconds maxRetryDelay,
     RetryHooks::Clock::time_point now,
     double randomUnit) {
     RetryDecision decision;
@@ -195,19 +227,12 @@ RetryDecision makeRetryDecision(
 
     const bool retryableTransport = response.errorKind == HttpErrorKind::Transport;
     const bool retryableStatus =
-        response.errorKind == HttpErrorKind::None && isRetryableHttpStatus(response.status);
+        response.errorKind == HttpErrorKind::None && shouldRetryHttpResponse(response);
     if (!retryableTransport && !retryableStatus) return decision;
 
-    auto delay = retryableStatus ? parseRetryAfter(response.headers, now) : std::nullopt;
+    auto delay = retryableStatus ? parseRetryDelay(response.headers, now) : std::nullopt;
     if (!delay) {
         delay = exponentialBackoffDelay(retriesAlreadyPerformed, randomUnit);
-    }
-
-    if (maxRetryDelay.count() > 0 && *delay > maxRetryDelay) {
-        decision.rejectionMessage =
-            "Retry-After delay " + std::to_string(delay->count()) +
-            "ms exceeds maximum " + std::to_string(maxRetryDelay.count()) + "ms";
-        return decision;
     }
 
     decision.retry = true;
