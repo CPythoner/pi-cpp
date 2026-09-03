@@ -33,12 +33,17 @@ OpenAiChatCompletionsDecoder::OpenAiChatCompletionsDecoder(
     output_.model = model_.id;
     output_.stopReason = StopReason::Stop;
     output_.timestamp = timestamp;
+}
 
+void OpenAiChatCompletionsDecoder::start() {
+    if (started_ || terminal_) return;
+    started_ = true;
     stream_.push(EvStart{output_});
 }
 
 void OpenAiChatCompletionsDecoder::feed(std::string_view transportChunk) {
     if (terminal_) return;
+    start();
     parser_.feed(transportChunk);
 }
 
@@ -46,6 +51,10 @@ void OpenAiChatCompletionsDecoder::finish() {
     if (terminal_) return;
     parser_.finish();
     if (!terminal_) complete();
+}
+
+void OpenAiChatCompletionsDecoder::fail(std::string message, StopReason reason) {
+    terminateError(std::move(message), reason);
 }
 
 void OpenAiChatCompletionsDecoder::onSseEvent(SseEvent event) {
@@ -62,7 +71,7 @@ void OpenAiChatCompletionsDecoder::onSseEvent(SseEvent event) {
         const auto chunk = nlohmann::json::parse(event.data);
         processChunk(chunk);
     } catch (const std::exception& error) {
-        fail(std::string("Failed to parse OpenAI SSE JSON: ") + error.what());
+        terminateError(std::string("Failed to parse OpenAI SSE JSON: ") + error.what(), StopReason::Error);
     }
 }
 
@@ -325,15 +334,17 @@ void OpenAiChatCompletionsDecoder::complete() {
     finalizeBlocks();
 
     if (output_.stopReason == StopReason::Aborted) {
-        fail("Request was aborted", StopReason::Aborted);
+        terminateError("Request was aborted", StopReason::Aborted);
         return;
     }
     if (output_.stopReason == StopReason::Error) {
-        fail(output_.errorMessage.value_or("Provider returned an error stop reason"));
+        terminateError(
+            output_.errorMessage.value_or("Provider returned an error stop reason"),
+            StopReason::Error);
         return;
     }
     if (!hasFinishReason_) {
-        fail("Stream ended without finish_reason");
+        terminateError("Stream ended without finish_reason", StopReason::Error);
         return;
     }
 
@@ -341,7 +352,7 @@ void OpenAiChatCompletionsDecoder::complete() {
     stream_.push(EvDone{output_.stopReason, output_});
 }
 
-void OpenAiChatCompletionsDecoder::fail(std::string message, StopReason reason) {
+void OpenAiChatCompletionsDecoder::terminateError(std::string message, StopReason reason) {
     if (terminal_) return;
 
     output_.stopReason = reason;
