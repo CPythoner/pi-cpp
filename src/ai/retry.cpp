@@ -9,6 +9,7 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <thread>
 
 namespace pi::ai::detail {
@@ -58,8 +59,8 @@ std::int64_t daysFromCivil(int year, unsigned month, unsigned day) noexcept {
     year -= month <= 2 ? 1 : 0;
     const int era = (year >= 0 ? year : year - 399) / 400;
     const unsigned yearOfEra = static_cast<unsigned>(year - era * 400);
-    const unsigned dayOfYear =
-        (153 * (month + (month > 2 ? static_cast<unsigned>(-3) : 9)) + 2) / 5 + day - 1;
+    const unsigned adjustedMonth = month > 2 ? month - 3 : month + 9;
+    const unsigned dayOfYear = (153 * adjustedMonth + 2) / 5 + day - 1;
     const unsigned dayOfEra =
         yearOfEra * 365 + yearOfEra / 4 - yearOfEra / 100 + dayOfYear;
     return static_cast<std::int64_t>(era) * 146097 +
