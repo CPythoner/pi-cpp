@@ -46,5 +46,5 @@ picpp_add_sdk_consumer_test(
 
 add_test(NAME picpp_version COMMAND $<TARGET_FILE:picpp> --version)
 set_tests_properties(picpp_version PROPERTIES
-    PASS_REGULAR_EXPRESSION "^picpp v0\\.0\\.1"
+    PASS_REGULAR_EXPRESSION "^picpp v0\\.0\\.2"
 )
