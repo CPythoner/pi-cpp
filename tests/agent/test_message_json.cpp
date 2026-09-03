@@ -329,8 +329,10 @@ TEST_CASE("UserMessage：字符串 content 与块数组 content 两种形态") {
     pi::ImageContent img;
     img.data = "AAAA";
     img.mimeType = "image/png";
+    pi::TextContent look;
+    look.text = "看图";
     pi::UserMessage mb;
-    mb.content = std::vector<pi::ContentBlock>{pi::TextContent{std::string{"看图"}}, img};
+    mb.content = std::vector<pi::ContentBlock>{look, img};
     mb.timestamp = 1770000002000;
 
     nlohmann::json jb = mb;
