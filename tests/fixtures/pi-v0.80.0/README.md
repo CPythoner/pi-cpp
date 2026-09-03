@@ -28,7 +28,7 @@ Tau fixtures may be used for engineering regression only. They are not canonical
 
 ## Real differential harness
 
-The v0.0.2 harness does not hand-write the reference event sequence. It starts a deterministic local OpenAI-compatible HTTP/SSE endpoint and sends the same scenario through both implementations:
+The v0.0.2 harness starts a deterministic local OpenAI-compatible HTTP/SSE endpoint and sends the same scenario through both implementations:
 
 ```text
 tests/reference/scenarios/openai.json
@@ -36,8 +36,6 @@ tests/reference/scenarios/openai.json
           +--> local HTTP/SSE server --> pi v0.80.0 source runner --> normalized JSONL
           |
           +--> local HTTP/SSE server --> pi-cpp Provider          --> normalized JSONL
-                                                                  |
-                                                              strict diff
 ```
 
 The upstream runner imports `packages/ai/src/api/openai-completions.ts` from the exact checkout. The pi-cpp runner consumes the public `OpenAICompatibleProvider`, so the comparison includes the real HTTP adapter, SSE parser, delta merger and `AssistantMessageEventStream` rather than calling private decoder helpers directly.
@@ -47,6 +45,31 @@ Initial deterministic scenarios are:
 - `text-stop`: two text deltas, stable usage, normal stop;
 - `tool-call`: tool-call arguments split across SSE deltas, including partial JSON state;
 - `length-stop`: text terminated by `finish_reason=length`.
+
+## Canonical three-way gate
+
+Reviewed reference traces are committed under:
+
+```text
+traces/
+├── text-stop.jsonl
+├── tool-call.jsonl
+└── length-stop.jsonl
+```
+
+Every Compatibility run now verifies:
+
+```text
+checked-in canonical fixture
+            ==
+fresh exact pi v0.80.0 execution
+            ==
+current pi-cpp execution
+```
+
+This prevents a normalization or reference-runner regression from silently turning into a green result merely because both generated traces changed together.
+
+The first passing three-way gate was established on 2026-09-03 after the real differential harness found and fixed two observable mismatches in `text_start.partial` and `toolcall_start.partial.arguments`.
 
 ## Trace normalization
 
@@ -84,18 +107,11 @@ cmake --build --preset release --target pi_reference_trace --parallel
 python3 tests/reference/run_differential.py \
   --pi-root .reference/pi \
   --cpp-runner build/release/tests/pi_reference_trace \
-  --output-dir build/reference-traces
+  --output-dir build/reference-traces \
+  --fixture-dir tests/fixtures/pi-v0.80.0/traces
 ```
 
 On Windows, invoke the corresponding `.exe`; the canonical differential CI runs on Ubuntu while the regular build matrix compiles `pi_reference_trace` on Linux, macOS and Windows.
-
-Once canonical traces are committed under `traces/`, pass:
-
-```text
---fixture-dir tests/fixtures/pi-v0.80.0/traces
-```
-
-to additionally verify that a newly generated real pi trace still matches the checked-in evidence.
 
 ## Directory layout
 
@@ -118,4 +134,4 @@ Each generated fixture set records or inherits from this document:
 
 ## Status
 
-The baseline metadata and real differential harness are present. The first Compatibility run generates the canonical upstream JSONL traces as a workflow artifact; after review those traces are checked in under `traces/` and become an additional fixture gate.
+The exact baseline metadata, real source runner, local deterministic SSE harness, canonical checked-in traces and three-way Compatibility gate are all active. These fixtures are compatibility evidence for pi `v0.80.0`; future additions must be generated from the same exact baseline unless the project explicitly changes its semantic baseline.
