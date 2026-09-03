@@ -1,5 +1,4 @@
-# 测试注册：每个测试一个可执行文件。
-# 业务类型通过三层 SDK target 获取；src/ 仅作为内部 util 测试的 PRIVATE include 路径。
+# 内部行为测试可以访问 src/ private support；public SDK consumer 测试不允许访问 src/。
 
 function(picpp_add_test name src)
     add_executable(${name} "${src}" "${CMAKE_CURRENT_SOURCE_DIR}/test_main.cpp")
@@ -12,10 +11,31 @@ function(picpp_add_test name src)
     add_test(NAME ${name} COMMAND ${name})
 endfunction()
 
+function(picpp_add_sdk_consumer_test name src sdk_target)
+    add_executable(${name} "${src}" "${CMAKE_CURRENT_SOURCE_DIR}/test_main.cpp")
+    target_link_libraries(${name} PRIVATE doctest ${sdk_target})
+    add_test(NAME ${name} COMMAND ${name})
+endfunction()
+
 picpp_add_test(test_smoke "${CMAKE_CURRENT_SOURCE_DIR}/test_smoke.cpp")
 picpp_add_test(test_string "${CMAKE_CURRENT_SOURCE_DIR}/util/test_string.cpp")
 picpp_add_test(test_cancel_token "${CMAKE_CURRENT_SOURCE_DIR}/util/test_cancel_token.cpp")
 picpp_add_test(test_thread_guard "${CMAKE_CURRENT_SOURCE_DIR}/util/test_thread_guard.cpp")
 picpp_add_test(test_message_json "${CMAKE_CURRENT_SOURCE_DIR}/agent/test_message_json.cpp")
 picpp_add_test(test_events_json "${CMAKE_CURRENT_SOURCE_DIR}/agent/test_events_json.cpp")
-picpp_add_test(test_sdk_headers "${CMAKE_CURRENT_SOURCE_DIR}/consumer/test_sdk_headers.cpp")
+
+picpp_add_sdk_consumer_test(
+    test_ai_sdk
+    "${CMAKE_CURRENT_SOURCE_DIR}/consumer/test_ai_sdk.cpp"
+    pi::ai
+)
+picpp_add_sdk_consumer_test(
+    test_agent_sdk
+    "${CMAKE_CURRENT_SOURCE_DIR}/consumer/test_agent_sdk.cpp"
+    pi::agent
+)
+picpp_add_sdk_consumer_test(
+    test_coding_agent_sdk
+    "${CMAKE_CURRENT_SOURCE_DIR}/consumer/test_coding_agent_sdk.cpp"
+    pi::coding-agent
+)
