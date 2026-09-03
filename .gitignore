@@ -1,0 +1,20 @@
+# macOS
+.DS_Store
+
+# 构建目录
+build/
+build-*/
+out/
+cmake-build-*/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# 编译产物
+*.o
+*.a
+*.so
+*.dylib
+compile_commands.json
