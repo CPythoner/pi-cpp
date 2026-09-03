@@ -9,32 +9,54 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # 依赖先于警告选项引入（FetchContent 的子目录不继承本目录的 -Werror）
 include(cmake/deps.cmake)
 
-# 警告即错误（依赖目录已在上方引入，不受影响）
 if(MSVC)
     add_compile_options(/W4 /WX)
 else()
     add_compile_options(-Wall -Wextra -Werror)
 endif()
 
-# 生成的 version.h（含 project 版本号）
 configure_file(cmake/version.h.in "${CMAKE_CURRENT_BINARY_DIR}/generated/version.h" @ONLY)
 
-# 类型/基础设施库（util+agent 源文件；T4 起填充）
-add_library(pi_types STATIC
+# ai SDK：LLM message/content、L1 provider events，以及后续 Provider/EventStream。
+add_library(pi_ai STATIC
+    src/ai/message.cpp
+    src/ai/events.cpp
     src/util/string.cpp
+)
+add_library(pi::ai ALIAS pi_ai)
+target_include_directories(pi_ai
+    PUBLIC
+        "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+    PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/src"
+)
+target_link_libraries(pi_ai PUBLIC nlohmann_json)
+
+# agent SDK：AgentMessage、L2 AgentEvent；v0.0.3 起加入 Agent/runLoop/tool abstraction。
+add_library(pi_agent STATIC
     src/agent/message.cpp
     src/agent/events.cpp
 )
-target_include_directories(pi_types PUBLIC
-    "${CMAKE_CURRENT_SOURCE_DIR}/src"
-    "${CMAKE_CURRENT_BINARY_DIR}/generated"
+add_library(pi::agent ALIAS pi_agent)
+target_include_directories(pi_agent
+    PUBLIC
+        "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+    PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/src"
 )
-# 注：FetchContent 引入的 nlohmann/json 构建树目标名为 nlohmann_json
-# （命名空间形式 nlohmann::nlohmann_json 仅存在于 find_package CONFIG 模式）
-target_link_libraries(pi_types PUBLIC nlohmann_json)
+target_link_libraries(pi_agent PUBLIC pi::ai)
 
-add_executable(picpp src/cli/main.cpp)
-target_link_libraries(picpp PRIVATE pi_types fmt::fmt)
+# coding-agent SDK：v0.0.4 起加入 coding tools；v0.0.1 先冻结依赖边界。
+add_library(pi_coding_agent INTERFACE)
+add_library(pi::coding-agent ALIAS pi_coding_agent)
+target_link_libraries(pi_coding_agent INTERFACE pi::agent)
+
+# v0.0.x 迁移期内部兼容名；新代码不得继续使用。
+add_library(pi_types ALIAS pi_agent)
+
+add_executable(picpp apps/picpp/main.cpp)
+target_include_directories(picpp PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
+target_link_libraries(picpp PRIVATE pi::coding-agent fmt::fmt)
 
 enable_testing()
 add_subdirectory(tests)
