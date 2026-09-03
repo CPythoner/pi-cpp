@@ -23,6 +23,11 @@ public:
         : state_(std::make_shared<State>(std::move(isComplete), std::move(extractResult))) {}
 
     void push(T event) {
+        {
+            std::lock_guard<std::mutex> lock(state_->mutex);
+            if (state_->done) return;
+        }
+
         const bool complete = state_->isComplete(event);
         std::optional<R> extracted;
         if (complete) {
@@ -77,12 +82,8 @@ public:
     R result() const {
         std::unique_lock<std::mutex> lock(state_->mutex);
         state_->cv.wait(lock, [this] {
-            return state_->finalResult.has_value() || state_->done;
+            return state_->finalResult.has_value();
         });
-
-        if (!state_->finalResult) {
-            throw std::logic_error("event stream ended without a final result");
-        }
         return *state_->finalResult;
     }
 
