@@ -13,14 +13,14 @@
 
 namespace pi::ai::detail {
 
-class OpenAiChatCompletionsDecoder {
+class OpenAIChatCompletionsDecoder {
 public:
-    OpenAiChatCompletionsDecoder(
+    OpenAIChatCompletionsDecoder(
         Model model,
         std::int64_t timestamp = 0);
 
-    OpenAiChatCompletionsDecoder(const OpenAiChatCompletionsDecoder&) = delete;
-    OpenAiChatCompletionsDecoder& operator=(const OpenAiChatCompletionsDecoder&) = delete;
+    OpenAIChatCompletionsDecoder(const OpenAIChatCompletionsDecoder&) = delete;
+    OpenAIChatCompletionsDecoder& operator=(const OpenAIChatCompletionsDecoder&) = delete;
 
     void start();
     void feed(std::string_view transportChunk);

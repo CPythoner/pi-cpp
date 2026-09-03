@@ -1,6 +1,6 @@
 #include <doctest/doctest.h>
 
-#include "ai/openai_compatible.hpp"
+#include "ai/openai_completions_decoder.hpp"
 
 #include <pi/ai/events.hpp>
 #include <pi/ai/message.hpp>
@@ -26,18 +26,18 @@ ai::Model makeModel() {
     return model;
 }
 
-void feedJson(detail::OpenAiChatCompletionsDecoder& decoder, const nlohmann::json& chunk) {
+void feedJson(detail::OpenAIChatCompletionsDecoder& decoder, const nlohmann::json& chunk) {
     decoder.feed(std::string("data: ") + chunk.dump() + "\n\n");
 }
 
-void feedDone(detail::OpenAiChatCompletionsDecoder& decoder) {
+void feedDone(detail::OpenAIChatCompletionsDecoder& decoder) {
     decoder.feed("data: [DONE]\n\n");
 }
 
 } // namespace
 
 TEST_CASE("toolcall delta exposes partially parsed arguments") {
-    detail::OpenAiChatCompletionsDecoder decoder(makeModel());
+    detail::OpenAIChatCompletionsDecoder decoder(makeModel());
     auto stream = decoder.stream();
 
     feedJson(decoder, {
@@ -85,7 +85,7 @@ TEST_CASE("toolcall delta exposes partially parsed arguments") {
 }
 
 TEST_CASE("tool call can receive id and name after its stream index was created") {
-    detail::OpenAiChatCompletionsDecoder decoder(makeModel());
+    detail::OpenAIChatCompletionsDecoder decoder(makeModel());
     auto stream = decoder.stream();
 
     feedJson(decoder, {
@@ -124,7 +124,7 @@ TEST_CASE("tool call can receive id and name after its stream index was created"
 }
 
 TEST_CASE("tool calls without stream index merge by id") {
-    detail::OpenAiChatCompletionsDecoder decoder(makeModel());
+    detail::OpenAIChatCompletionsDecoder decoder(makeModel());
     auto stream = decoder.stream();
 
     feedJson(decoder, {
@@ -161,7 +161,7 @@ TEST_CASE("tool calls without stream index merge by id") {
 }
 
 TEST_CASE("encrypted reasoning detail attaches to an existing tool call") {
-    detail::OpenAiChatCompletionsDecoder decoder(makeModel());
+    detail::OpenAIChatCompletionsDecoder decoder(makeModel());
     auto stream = decoder.stream();
 
     const nlohmann::json detailJson{
@@ -193,7 +193,7 @@ TEST_CASE("encrypted reasoning detail attaches to an existing tool call") {
 }
 
 TEST_CASE("encrypted reasoning detail waits for a later tool call id") {
-    detail::OpenAiChatCompletionsDecoder decoder(makeModel());
+    detail::OpenAIChatCompletionsDecoder decoder(makeModel());
     auto stream = decoder.stream();
 
     const nlohmann::json detailJson{

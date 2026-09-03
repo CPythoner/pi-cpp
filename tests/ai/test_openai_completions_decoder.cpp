@@ -1,6 +1,6 @@
 #include <doctest/doctest.h>
 
-#include "ai/openai_compatible.hpp"
+#include "ai/openai_completions_decoder.hpp"
 
 #include <pi/ai/events.hpp>
 #include <pi/ai/message.hpp>
@@ -32,11 +32,11 @@ ai::Model makeModel() {
     return model;
 }
 
-void feedJson(detail::OpenAiChatCompletionsDecoder& decoder, const nlohmann::json& chunk) {
+void feedJson(detail::OpenAIChatCompletionsDecoder& decoder, const nlohmann::json& chunk) {
     decoder.feed(std::string("data: ") + chunk.dump() + "\n\n");
 }
 
-void feedDone(detail::OpenAiChatCompletionsDecoder& decoder) {
+void feedDone(detail::OpenAIChatCompletionsDecoder& decoder) {
     decoder.feed("data: [DONE]\n\n");
 }
 
@@ -67,7 +67,7 @@ std::string eventType(const ai::AssistantMessageEvent& event) {
 } // namespace
 
 TEST_CASE("OpenAI decoder emits cumulative text events and final metadata") {
-    detail::OpenAiChatCompletionsDecoder decoder(makeModel(), 1234);
+    detail::OpenAIChatCompletionsDecoder decoder(makeModel(), 1234);
     auto stream = decoder.stream();
 
     feedJson(decoder, {
@@ -118,7 +118,7 @@ TEST_CASE("OpenAI decoder emits cumulative text events and final metadata") {
 }
 
 TEST_CASE("OpenAI decoder aggregates reasoning into one thinking block") {
-    detail::OpenAiChatCompletionsDecoder decoder(makeModel());
+    detail::OpenAIChatCompletionsDecoder decoder(makeModel());
     auto stream = decoder.stream();
 
     feedJson(decoder, {
@@ -152,7 +152,7 @@ TEST_CASE("OpenAI decoder aggregates reasoning into one thinking block") {
 }
 
 TEST_CASE("OpenAI decoder merges tool call fragments by stream index") {
-    detail::OpenAiChatCompletionsDecoder decoder(makeModel());
+    detail::OpenAIChatCompletionsDecoder decoder(makeModel());
     auto stream = decoder.stream();
 
     feedJson(decoder, {
@@ -202,7 +202,7 @@ TEST_CASE("OpenAI decoder merges tool call fragments by stream index") {
 
 TEST_CASE("OpenAI decoder maps usage cache tokens and model cost") {
     auto model = makeModel();
-    detail::OpenAiChatCompletionsDecoder decoder(model);
+    detail::OpenAIChatCompletionsDecoder decoder(model);
     auto stream = decoder.stream();
 
     feedJson(decoder, {
@@ -243,7 +243,7 @@ TEST_CASE("OpenAI decoder maps usage cache tokens and model cost") {
 }
 
 TEST_CASE("OpenAI decoder turns malformed SSE JSON into terminal error") {
-    detail::OpenAiChatCompletionsDecoder decoder(makeModel());
+    detail::OpenAIChatCompletionsDecoder decoder(makeModel());
     auto stream = decoder.stream();
 
     decoder.feed("data: {not-json}\n\n");
@@ -261,7 +261,7 @@ TEST_CASE("OpenAI decoder turns malformed SSE JSON into terminal error") {
 }
 
 TEST_CASE("OpenAI decoder rejects DONE without finish_reason") {
-    detail::OpenAiChatCompletionsDecoder decoder(makeModel());
+    detail::OpenAIChatCompletionsDecoder decoder(makeModel());
     auto stream = decoder.stream();
 
     feedDone(decoder);
@@ -278,7 +278,7 @@ TEST_CASE("OpenAI decoder rejects DONE without finish_reason") {
 }
 
 TEST_CASE("OpenAI decoder maps provider error finish reasons to EvError") {
-    detail::OpenAiChatCompletionsDecoder decoder(makeModel());
+    detail::OpenAIChatCompletionsDecoder decoder(makeModel());
     auto stream = decoder.stream();
 
     feedJson(decoder, {

@@ -1,4 +1,4 @@
-#include "ai/openai_compatible.hpp"
+#include "ai/openai_completions_decoder.hpp"
 
 #include "ai/streaming_json.hpp"
 
@@ -34,7 +34,7 @@ bool isEncryptedReasoningDetail(const nlohmann::json& detail) {
 
 } // namespace
 
-OpenAiChatCompletionsDecoder::OpenAiChatCompletionsDecoder(
+OpenAIChatCompletionsDecoder::OpenAIChatCompletionsDecoder(
     Model model,
     std::int64_t timestamp)
     : model_(std::move(model)),
@@ -46,29 +46,29 @@ OpenAiChatCompletionsDecoder::OpenAiChatCompletionsDecoder(
     output_.timestamp = timestamp;
 }
 
-void OpenAiChatCompletionsDecoder::start() {
+void OpenAIChatCompletionsDecoder::start() {
     if (started_ || terminal_) return;
     started_ = true;
     stream_.push(EvStart{output_});
 }
 
-void OpenAiChatCompletionsDecoder::feed(std::string_view transportChunk) {
+void OpenAIChatCompletionsDecoder::feed(std::string_view transportChunk) {
     if (terminal_) return;
     start();
     parser_.feed(transportChunk);
 }
 
-void OpenAiChatCompletionsDecoder::finish() {
+void OpenAIChatCompletionsDecoder::finish() {
     if (terminal_) return;
     parser_.finish();
     if (!terminal_) complete();
 }
 
-void OpenAiChatCompletionsDecoder::fail(std::string message, StopReason reason) {
+void OpenAIChatCompletionsDecoder::fail(std::string message, StopReason reason) {
     terminateError(std::move(message), reason);
 }
 
-void OpenAiChatCompletionsDecoder::onSseEvent(SseEvent event) {
+void OpenAIChatCompletionsDecoder::onSseEvent(SseEvent event) {
     if (terminal_) return;
 
     if (event.data == "[DONE]") {
@@ -86,7 +86,7 @@ void OpenAiChatCompletionsDecoder::onSseEvent(SseEvent event) {
     }
 }
 
-void OpenAiChatCompletionsDecoder::processChunk(const nlohmann::json& chunk) {
+void OpenAIChatCompletionsDecoder::processChunk(const nlohmann::json& chunk) {
     if (!chunk.is_object() || terminal_) return;
 
     if (!output_.responseId) {
@@ -129,7 +129,7 @@ void OpenAiChatCompletionsDecoder::processChunk(const nlohmann::json& chunk) {
     }
 }
 
-void OpenAiChatCompletionsDecoder::processDelta(const nlohmann::json& delta) {
+void OpenAIChatCompletionsDecoder::processDelta(const nlohmann::json& delta) {
     if (const auto content = stringValue(delta, "content"); content && !content->empty()) {
         const bool blockStarted = textIndex_.has_value();
         const auto index = ensureTextBlock();
@@ -178,7 +178,7 @@ void OpenAiChatCompletionsDecoder::processDelta(const nlohmann::json& delta) {
     }
 }
 
-void OpenAiChatCompletionsDecoder::processToolCalls(const nlohmann::json& toolCalls) {
+void OpenAIChatCompletionsDecoder::processToolCalls(const nlohmann::json& toolCalls) {
     for (const auto& toolCallDelta : toolCalls) {
         if (!toolCallDelta.is_object()) continue;
 
@@ -220,7 +220,7 @@ void OpenAiChatCompletionsDecoder::processToolCalls(const nlohmann::json& toolCa
     }
 }
 
-void OpenAiChatCompletionsDecoder::processReasoningDetails(
+void OpenAIChatCompletionsDecoder::processReasoningDetails(
     const nlohmann::json& reasoningDetails) {
     for (const auto& detail : reasoningDetails) {
         if (!isEncryptedReasoningDetail(detail)) continue;
@@ -236,7 +236,7 @@ void OpenAiChatCompletionsDecoder::processReasoningDetails(
     }
 }
 
-void OpenAiChatCompletionsDecoder::parseUsage(const nlohmann::json& usage) {
+void OpenAIChatCompletionsDecoder::parseUsage(const nlohmann::json& usage) {
     const auto promptTokens = integerOrZero(usage, "prompt_tokens");
     const auto outputTokens = integerOrZero(usage, "completion_tokens");
 
@@ -272,7 +272,7 @@ void OpenAiChatCompletionsDecoder::parseUsage(const nlohmann::json& usage) {
         output_.usage.cost.cacheWrite;
 }
 
-void OpenAiChatCompletionsDecoder::applyFinishReason(std::string_view reason) {
+void OpenAIChatCompletionsDecoder::applyFinishReason(std::string_view reason) {
     if (reason == "stop") {
         output_.stopReason = StopReason::Stop;
         output_.errorMessage.reset();
@@ -288,7 +288,7 @@ void OpenAiChatCompletionsDecoder::applyFinishReason(std::string_view reason) {
     }
 }
 
-std::size_t OpenAiChatCompletionsDecoder::ensureTextBlock() {
+std::size_t OpenAIChatCompletionsDecoder::ensureTextBlock() {
     if (textIndex_) return *textIndex_;
 
     output_.content.emplace_back(TextContent{});
@@ -296,7 +296,7 @@ std::size_t OpenAiChatCompletionsDecoder::ensureTextBlock() {
     return *textIndex_;
 }
 
-std::size_t OpenAiChatCompletionsDecoder::ensureThinkingBlock(std::string signature) {
+std::size_t OpenAIChatCompletionsDecoder::ensureThinkingBlock(std::string signature) {
     if (thinkingIndex_) return *thinkingIndex_;
 
     ThinkingContent block;
@@ -306,7 +306,7 @@ std::size_t OpenAiChatCompletionsDecoder::ensureThinkingBlock(std::string signat
     return *thinkingIndex_;
 }
 
-OpenAiChatCompletionsDecoder::ToolState& OpenAiChatCompletionsDecoder::ensureToolState(
+OpenAIChatCompletionsDecoder::ToolState& OpenAIChatCompletionsDecoder::ensureToolState(
     const nlohmann::json& toolCall) {
     std::optional<std::int64_t> streamIndex;
     if (const auto it = toolCall.find("index"); it != toolCall.end() && it->is_number_integer()) {
@@ -358,7 +358,7 @@ OpenAiChatCompletionsDecoder::ToolState& OpenAiChatCompletionsDecoder::ensureToo
     return state;
 }
 
-void OpenAiChatCompletionsDecoder::finalizeBlocks() {
+void OpenAIChatCompletionsDecoder::finalizeBlocks() {
     if (blocksFinalized_) return;
     blocksFinalized_ = true;
 
@@ -377,7 +377,7 @@ void OpenAiChatCompletionsDecoder::finalizeBlocks() {
     }
 }
 
-void OpenAiChatCompletionsDecoder::complete() {
+void OpenAIChatCompletionsDecoder::complete() {
     if (terminal_) return;
 
     finalizeBlocks();
@@ -401,7 +401,7 @@ void OpenAiChatCompletionsDecoder::complete() {
     stream_.push(EvDone{output_.stopReason, output_});
 }
 
-void OpenAiChatCompletionsDecoder::terminateError(std::string message, StopReason reason) {
+void OpenAIChatCompletionsDecoder::terminateError(std::string message, StopReason reason) {
     if (terminal_) return;
 
     output_.stopReason = reason;
@@ -410,7 +410,7 @@ void OpenAiChatCompletionsDecoder::terminateError(std::string message, StopReaso
     stream_.push(EvError{reason, output_});
 }
 
-nlohmann::json OpenAiChatCompletionsDecoder::parseStreamingArguments(std::string_view partial) {
+nlohmann::json OpenAIChatCompletionsDecoder::parseStreamingArguments(std::string_view partial) {
     return parseStreamingJson(partial);
 }
 

@@ -1,6 +1,6 @@
 #include "ai/openai_provider.hpp"
 
-#include "ai/openai_compatible.hpp"
+#include "ai/openai_completions_decoder.hpp"
 #include "ai/openai_request.hpp"
 
 #include <pi/ai/openai_compatible.hpp>
@@ -110,7 +110,7 @@ std::string httpFailureMessage(const HttpResponse& response) {
 }
 
 void failFromResponse(
-    const std::shared_ptr<OpenAiChatCompletionsDecoder>& decoder,
+    const std::shared_ptr<OpenAIChatCompletionsDecoder>& decoder,
     const HttpResponse& response) {
     const bool successfulResponse = response.status >= 200 && response.status < 300;
     if (successfulResponse) {
@@ -157,7 +157,7 @@ AssistantMessageEventStream OpenAIProviderCore::stream(
     const Model& model,
     const Context& context,
     const StreamOptions& options) const {
-    auto decoder = std::make_shared<OpenAiChatCompletionsDecoder>(model, nowMilliseconds());
+    auto decoder = std::make_shared<OpenAIChatCompletionsDecoder>(model, nowMilliseconds());
     auto output = decoder->stream();
 
     if (!transport_) {
