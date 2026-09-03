@@ -64,7 +64,12 @@ struct StreamOptions {
     std::optional<std::string> apiKey;
     ProviderHeaders headers;
     std::optional<std::chrono::milliseconds> timeout;
+    // Number of retry attempts after the initial request. The OpenAI-compatible
+    // provider defaults to zero, matching pi v0.80.0's OpenAI path.
     std::optional<std::size_t> maxRetries;
+    // Cap for a server-requested Retry-After delay. Default is 60 seconds.
+    // Zero disables the cap.
+    std::optional<std::chrono::milliseconds> maxRetryDelay;
 };
 
 class Provider {
