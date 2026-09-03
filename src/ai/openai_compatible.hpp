@@ -42,6 +42,7 @@ private:
     void processChunk(const nlohmann::json& chunk);
     void processDelta(const nlohmann::json& delta);
     void processToolCalls(const nlohmann::json& toolCalls);
+    void processReasoningDetails(const nlohmann::json& reasoningDetails);
     void parseUsage(const nlohmann::json& usage);
     void applyFinishReason(std::string_view reason);
 
@@ -69,6 +70,7 @@ private:
     std::map<std::int64_t, std::size_t> toolByStreamIndex_;
     std::map<std::string, std::size_t> toolById_;
     std::map<std::size_t, ToolState> toolStates_;
+    std::map<std::string, std::string> pendingReasoningDetailsByToolCallId_;
 };
 
 } // namespace pi::ai::detail
