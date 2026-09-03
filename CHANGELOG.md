@@ -1,18 +1,35 @@
 # Changelog
 
-本仓库所有显著变更记录。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循三位语义化（从 v0.0.1 起）。每个版本与 `docs/design/vX.Y.Z.md` 设计文章、git tag 一一对应。
+本仓库所有显著变更记录。每个版本与 `docs/design/vX.Y.Z.md`、CHANGELOG 和 git tag 一一对应。
 
 ## [Unreleased]
 
 ## [v0.0.1] - 2026-09-03
 ### Added
-- CMake 骨架与三平台 CI（ubuntu-24.04 / macos-15 / windows-2022；C++17、-Wall -Wextra -Werror）
-- 依赖管理：nlohmann/json v3.11.3、fmt 10.2.1、doctest v2.4.12（FetchContent + SYSTEM + 精确 pin）
-- pi 兼容消息类型系统：4 种内容块 + 7 种消息角色，camelCase JSON 双向序列化，黄金样本 JSONL round-trip
-- 事件类型系统：L1 provider 事件 12 种 + L2 agent 事件 10 种
-- util 基础设施：CancellationToken / CombinedCancellation / ThreadGuard / string 工具 / overload
-- `picpp --version` 入口
-- 63 个 doctest 用例（6 个测试目标）
+- CMake 骨架与三平台 CI（ubuntu-24.04 / macos-15 / windows-2022；C++17、warning-as-error）
+- 三层 SDK 边界：`ai` → `agent` → `coding-agent`
+- public headers：`include/pi/ai`、`include/pi/agent`、`include/pi/coding-agent`
+- CMake targets：`pi::ai`、`pi::agent`、`pi::coding-agent`
+- canonical C++ namespaces：`pi::ai`、`pi::agent`、`pi::coding_agent`
+- `apps/picpp/main.cpp` 官方 CLI 入口；核心 SDK 不依赖 CLI/TUI
+- ai 消息/内容类型：4 种 ContentBlock、User/Assistant/ToolResult Message、Usage/Cost/StopReason
+- agent 消息类型：7 种 AgentMessage 角色
+- ai L1 Provider 事件 12 种 + agent L2 事件 10 种
+- C++17 基础设施：CancellationToken / CombinedCancellation / ThreadGuard / string helpers
+- 三个手工 JSONL fixture round-trip 测试
+- canonical public SDK consumer smoke test
+- `picpp --version`
+
+### Changed
+- 移除长期使用单一 `pi_types` target 的方案；类型按 `ai` / `agent` 职责拆分
+- `src/` 不再作为 SDK PUBLIC include path
+- CLI 从 `src/cli` 移到 `apps/picpp`
+- 行为/wire 规范明确以 pi `v0.80.0` 为准，Tau `v0.4.1` 仅作实现参考
+
+### Known limitations
+- 当前 JSONL fixtures 为手工样本，不构成真实 pi `v0.80.0` compatibility evidence；v0.0.2 建立 reference harness + differential tests
+- CancellationToken 在进入真实 HTTP 前仍需完成 callback 锁外执行与 unregister/request/destructor race 加固
+- coding-agent 在 v0.0.1 仅建立 target/public namespace 骨架；read/write/edit/bash 从 v0.0.4 实现
 
 <!-- 模板：
 ## [vX.Y.Z] - YYYY-MM-DD
