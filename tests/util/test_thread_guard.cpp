@@ -49,7 +49,11 @@ TEST_CASE("join() 后再析构安全") {
 
 TEST_CASE("get_id 与线程一致") {
     pi::ThreadGuard guard{std::thread([] {})};
-    CHECK_NE(guard.get_id(), std::thread::id());
+    // 注意：不能用 CHECK_NE 直接比较 std::thread::id——doctest 会尝试字符串化操作数，
+    // libstdc++13 下 operator<< 的实例化在 <thread> 内部失败（平台差异）。
+    // 包装为 bool 后 doctest 无需字符串化 thread::id。
+    const bool hasValidId = (guard.get_id() != std::thread::id());
+    CHECK(hasValidId);
     guard.join();
 }
 

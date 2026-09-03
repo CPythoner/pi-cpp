@@ -34,12 +34,14 @@
     {
       "name": "debug",
       "displayName": "Debug",
-      "configurePreset": "debug"
+      "configurePreset": "debug",
+      "configuration": "Debug"
     },
     {
       "name": "release",
       "displayName": "Release",
-      "configurePreset": "release"
+      "configurePreset": "release",
+      "configuration": "Release"
     }
   ],
   "testPresets": [
