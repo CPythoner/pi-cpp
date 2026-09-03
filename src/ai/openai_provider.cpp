@@ -112,6 +112,14 @@ std::string httpFailureMessage(const HttpResponse& response) {
 void failFromResponse(
     const std::shared_ptr<OpenAiChatCompletionsDecoder>& decoder,
     const HttpResponse& response) {
+    const bool successfulResponse = response.status >= 200 && response.status < 300;
+    if (successfulResponse) {
+        // pi emits start immediately after the OpenAI SDK has a successful HTTP
+        // Response, before iterating its body. Preserve that ordering even when
+        // the body stream fails before yielding the first SSE chunk.
+        decoder->start();
+    }
+
     if (response.errorKind == HttpErrorKind::Cancelled) {
         decoder->fail("Request was aborted", StopReason::Aborted);
         return;
@@ -127,15 +135,13 @@ void failFromResponse(
         decoder->fail("HTTP stream consumer aborted");
         return;
     }
-    if (response.status < 200 || response.status >= 300) {
+    if (!successfulResponse) {
         decoder->fail(httpFailureMessage(response));
         return;
     }
 
-    // A successful HTTP response exists even if the server produced no body
-    // chunks. In that case pi emits start before the terminal protocol error for
-    // the missing finish_reason.
-    decoder->start();
+    // Successful HTTP response with no body chunks: finish produces the
+    // protocol error for a missing finish_reason after the already-emitted start.
     decoder->finish();
 }
 
