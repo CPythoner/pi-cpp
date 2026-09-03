@@ -46,9 +46,13 @@ target_include_directories(pi_agent
 )
 target_link_libraries(pi_agent PUBLIC pi::ai)
 
-# coding-agent SDK：v0.0.4 起加入 coding tools；v0.0.1 先冻结依赖边界。
+# coding-agent SDK：v0.0.4 起加入 coding tools；v0.0.1 先冻结依赖与 public include 边界。
 add_library(pi_coding_agent INTERFACE)
 add_library(pi::coding-agent ALIAS pi_coding_agent)
+target_include_directories(pi_coding_agent
+    INTERFACE
+        "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+)
 target_link_libraries(pi_coding_agent INTERFACE pi::agent)
 
 add_executable(picpp apps/picpp/main.cpp)
