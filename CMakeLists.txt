@@ -51,9 +51,6 @@ add_library(pi_coding_agent INTERFACE)
 add_library(pi::coding-agent ALIAS pi_coding_agent)
 target_link_libraries(pi_coding_agent INTERFACE pi::agent)
 
-# v0.0.x 迁移期内部兼容名；新代码不得继续使用。
-add_library(pi_types ALIAS pi_agent)
-
 add_executable(picpp apps/picpp/main.cpp)
 target_include_directories(picpp PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
 target_link_libraries(picpp PRIVATE pi::coding-agent fmt::fmt)
