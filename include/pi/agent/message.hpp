@@ -79,11 +79,3 @@ void to_json(nlohmann::json& j, const AgentMessage& m);
 void from_json(const nlohmann::json& j, AgentMessage& m);
 
 } // namespace pi::agent
-
-namespace pi {
-using agent::AgentMessage;
-using agent::BashExecutionMessage;
-using agent::BranchSummaryMessage;
-using agent::CompactionSummaryMessage;
-using agent::CustomMessage;
-} // namespace pi
