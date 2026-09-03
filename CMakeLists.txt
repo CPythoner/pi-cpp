@@ -22,6 +22,7 @@ add_library(pi_ai STATIC
     src/ai/message.cpp
     src/ai/events.cpp
     src/ai/sse_parser.cpp
+    src/ai/streaming_json.cpp
     src/ai/openai_request.cpp
     src/ai/openai_compatible.cpp
     src/ai/openai_provider.cpp
