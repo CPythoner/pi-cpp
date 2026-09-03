@@ -4,6 +4,7 @@
 #include <pi/ai/event_stream.hpp>
 #include <pi/ai/events.hpp>
 #include <pi/ai/message.hpp>
+#include <pi/ai/openai_compatible.hpp>
 #include <pi/ai/provider.hpp>
 
 #include <string>
@@ -63,4 +64,8 @@ TEST_CASE("ai sdk is independently consumable") {
     REQUIRE(terminal.has_value());
     CHECK(std::holds_alternative<pi::ai::EvDone>(*terminal));
     CHECK_EQ(providerStream.result().model, "consumer-model");
+
+    pi::ai::OpenAICompatibleProvider openaiProvider;
+    pi::ai::Provider* publicProviderApi = &openaiProvider;
+    CHECK(publicProviderApi != nullptr);
 }
