@@ -21,6 +21,7 @@ configure_file(cmake/version.h.in "${CMAKE_CURRENT_BINARY_DIR}/generated/version
 add_library(pi_ai STATIC
     src/ai/message.cpp
     src/ai/events.cpp
+    src/ai/sse_parser.cpp
     src/util/string.cpp
 )
 add_library(pi::ai ALIAS pi_ai)
