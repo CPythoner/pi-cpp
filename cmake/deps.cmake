@@ -5,8 +5,9 @@ set(CMAKE_POLICY_VERSION_MINIMUM "3.5" CACHE STRING "")
 
 # FetchContent dependencies are implementation details of the SDK. Keep them
 # static so an external pi::ai consumer does not inherit private CPR/libcurl
-# runtime DLL deployment requirements on Windows.
-set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+# runtime DLL deployment requirements on Windows. Use a directory-scoped normal
+# variable instead of forcing the parent project's BUILD_SHARED_LIBS cache.
+set(BUILD_SHARED_LIBS OFF)
 
 # 关闭依赖自带的测试与示例，避免拖慢构建
 set(FMT_TEST OFF CACHE BOOL "")
