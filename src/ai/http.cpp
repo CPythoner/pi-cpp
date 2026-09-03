@@ -76,7 +76,7 @@ public:
             [&currentStatus, &consumerAborted, &errorBody, &onChunk](
                 std::string_view data,
                 std::intptr_t) {
-                if (currentStatus >= 400) {
+                if (currentStatus != 0 && (currentStatus < 200 || currentStatus >= 300)) {
                     errorBody.append(data.data(), data.size());
                     return true;
                 }
