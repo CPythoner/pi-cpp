@@ -256,22 +256,3 @@ void to_json(nlohmann::json& j, const Message& m);
 void from_json(const nlohmann::json& j, Message& m);
 
 } // namespace pi::ai
-
-// v0.0.x source-compat aliases. Canonical SDK names live in pi::ai.
-namespace pi {
-using ai::AssistantMessage;
-using ai::ContentBlock;
-using ai::Cost;
-using ai::Diagnostic;
-using ai::DiagnosticError;
-using ai::ImageContent;
-using ai::Message;
-using ai::StopReason;
-using ai::TextContent;
-using ai::ThinkingContent;
-using ai::ToolCall;
-using ai::ToolResultMessage;
-using ai::Usage;
-using ai::UserContent;
-using ai::UserMessage;
-} // namespace pi
