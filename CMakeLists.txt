@@ -24,6 +24,7 @@ add_library(pi_ai STATIC
     src/ai/sse_parser.cpp
     src/ai/openai_request.cpp
     src/ai/openai_compatible.cpp
+    src/ai/openai_provider.cpp
     src/ai/http.cpp
     src/util/string.cpp
 )
