@@ -22,10 +22,13 @@ public:
     OpenAiChatCompletionsDecoder(const OpenAiChatCompletionsDecoder&) = delete;
     OpenAiChatCompletionsDecoder& operator=(const OpenAiChatCompletionsDecoder&) = delete;
 
+    void start();
     void feed(std::string_view transportChunk);
     void finish();
+    void fail(std::string message, StopReason reason = StopReason::Error);
 
     AssistantMessageEventStream stream() const { return stream_; }
+    bool started() const noexcept { return started_; }
     bool terminal() const noexcept { return terminal_; }
 
 private:
@@ -48,7 +51,7 @@ private:
 
     void finalizeBlocks();
     void complete();
-    void fail(std::string message, StopReason reason = StopReason::Error);
+    void terminateError(std::string message, StopReason reason);
 
     static nlohmann::json parseStreamingArguments(std::string_view partial);
 
@@ -57,6 +60,7 @@ private:
     AssistantMessageEventStream stream_;
     SseParser parser_;
 
+    bool started_ = false;
     bool terminal_ = false;
     bool hasFinishReason_ = false;
     bool blocksFinalized_ = false;
