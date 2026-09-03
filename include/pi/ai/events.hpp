@@ -27,7 +27,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(EvTextDelta, contentIndex, delta
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(EvTextEnd, contentIndex, content, partial)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(EvThinkingStart, contentIndex, partial)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(EvThinkingDelta, contentIndex, delta, partial)
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(EvThinkingEnd, contentIndex, content, partial)
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(EvThinkingEnd, contentIndex, partial)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(EvToolCallStart, contentIndex, partial)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(EvToolCallDelta, contentIndex, delta, partial)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(EvToolCallEnd, contentIndex, toolCall, partial)
@@ -52,19 +52,3 @@ void to_json(nlohmann::json& j, const AssistantMessageEvent& e);
 void from_json(const nlohmann::json& j, AssistantMessageEvent& e);
 
 } // namespace pi::ai
-
-namespace pi {
-using ai::AssistantMessageEvent;
-using ai::EvDone;
-using ai::EvError;
-using ai::EvStart;
-using ai::EvTextDelta;
-using ai::EvTextEnd;
-using ai::EvTextStart;
-using ai::EvThinkingDelta;
-using ai::EvThinkingEnd;
-using ai::EvThinkingStart;
-using ai::EvToolCallDelta;
-using ai::EvToolCallEnd;
-using ai::EvToolCallStart;
-} // namespace pi
