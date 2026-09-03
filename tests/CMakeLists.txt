@@ -18,3 +18,4 @@ picpp_add_test(test_cancel_token "${CMAKE_CURRENT_SOURCE_DIR}/util/test_cancel_t
 picpp_add_test(test_thread_guard "${CMAKE_CURRENT_SOURCE_DIR}/util/test_thread_guard.cpp")
 picpp_add_test(test_message_json "${CMAKE_CURRENT_SOURCE_DIR}/agent/test_message_json.cpp")
 picpp_add_test(test_events_json "${CMAKE_CURRENT_SOURCE_DIR}/agent/test_events_json.cpp")
+picpp_add_test(test_sdk_headers "${CMAKE_CURRENT_SOURCE_DIR}/consumer/test_sdk_headers.cpp")
