@@ -50,17 +50,3 @@ void to_json(nlohmann::json& j, const AgentEvent& e);
 void from_json(const nlohmann::json& j, AgentEvent& e);
 
 } // namespace pi::agent
-
-namespace pi {
-using agent::AgentEvent;
-using agent::EvAgentEnd;
-using agent::EvAgentStart;
-using agent::EvMessageEnd;
-using agent::EvMessageStart;
-using agent::EvMessageUpdate;
-using agent::EvToolExecutionEnd;
-using agent::EvToolExecutionStart;
-using agent::EvToolExecutionUpdate;
-using agent::EvTurnEnd;
-using agent::EvTurnStart;
-} // namespace pi
