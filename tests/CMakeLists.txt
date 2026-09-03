@@ -1,11 +1,14 @@
-# 测试注册：每个测试一个可执行文件，统一链接 doctest 与 pi_types。
-# test_main.cpp 提供 doctest 主函数（DOCTEST_CONFIG_IMPLEMENT）。
+# 测试注册：每个测试一个可执行文件。
+# 业务类型通过三层 SDK target 获取；src/ 仅作为内部 util 测试的 PRIVATE include 路径。
 
 function(picpp_add_test name src)
     add_executable(${name} "${src}" "${CMAKE_CURRENT_SOURCE_DIR}/test_main.cpp")
-    # 源码目录宏（fixtures 等测试数据的定位）
     target_compile_definitions(${name} PRIVATE PI_TESTS_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
-    target_link_libraries(${name} PRIVATE doctest pi_types)
+    target_include_directories(${name} PRIVATE
+        "${PROJECT_SOURCE_DIR}/include/pi"
+        "${PROJECT_SOURCE_DIR}/src"
+    )
+    target_link_libraries(${name} PRIVATE doctest pi::coding-agent)
     add_test(NAME ${name} COMMAND ${name})
 endfunction()
 
