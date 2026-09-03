@@ -29,13 +29,11 @@
 这类文档回答：**遇到同类工程问题时应该怎么验证、怎么避免踩坑。**
 
 - [Differential Compatibility Testing](engineering/differential-compatibility-testing.md)
+- [Streaming Protocol Parsing](engineering/streaming-protocol-parsing.md)
+- [Retry 与 Error Semantics](engineering/retry-and-error-semantics.md)
+- [CMake SDK Boundaries](engineering/cmake-sdk-boundaries.md)
 
-后续适合继续沉淀：
-
-- streaming protocol parsing；
-- retry / error semantics；
-- CMake SDK boundaries；
-- install/export/find_package consumer validation。
+后续 install/export/find_package、Agent/Session differential、RPC streaming 等工程实践继续在这一层扩展。
 
 ### `design/` — 版本设计与实现决策
 
@@ -53,7 +51,34 @@
 - [v0.0.1 Final Closeout](closeout/v0.0.1.md)
 - [v0.0.2 Final Closeout](closeout/v0.0.2.md)
 
-## 3. 兼容性文档原则
+## 3. v0.0.2 沉淀出的知识地图
+
+```text
+CancellationToken / CombinedCancellation
+        └─ architecture/cancellation.md
+
+EventStream / terminal semantics
+        └─ architecture/event-stream.md
+
+Provider / HTTP / decoder layering
+        └─ architecture/provider-runtime.md
+
+exact upstream compatibility gate
+        └─ engineering/differential-compatibility-testing.md
+
+HTTP chunks / SSE / partial JSON
+        └─ engineering/streaming-protocol-parsing.md
+
+retry / Retry-After / cancellation timing
+        └─ engineering/retry-and-error-semantics.md
+
+PUBLIC/PRIVATE dependency / consumer isolation
+        └─ engineering/cmake-sdk-boundaries.md
+```
+
+这些文档都源于 v0.0.2 的真实实现和测试，但其结论面向后续版本长期复用。
+
+## 4. 兼容性文档原则
 
 项目当前行为语义基线固定为：
 
@@ -68,7 +93,7 @@ Tau `v0.4.1` 只作为实现参考。发生冲突时：
 
 版本设计文档负责记录“本版证明到了哪里”；工程方法文档负责说明“如何建立可重复的证明”。
 
-## 4. 文档维护规则
+## 5. 文档维护规则
 
 - public API、并发语义、事件语义、生命周期等跨版本约束优先写入 `architecture/`；
 - 测试方法、协议调试、兼容性验证、构建边界等可复用经验优先写入 `engineering/`；
