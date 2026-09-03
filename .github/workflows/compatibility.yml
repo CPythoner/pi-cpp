@@ -53,6 +53,7 @@ jobs:
           --pi-root .reference/pi
           --cpp-runner build/release/tests/pi_reference_trace
           --output-dir build/reference-traces
+          --fixture-dir tests/fixtures/pi-v0.80.0/traces
 
       - name: Upload differential traces
         if: always()
