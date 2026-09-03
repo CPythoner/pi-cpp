@@ -140,12 +140,8 @@ RetryHooks defaultRetryHooks() {
     hooks.sleep = [](
                       std::chrono::milliseconds delay,
                       const std::shared_ptr<CancellationToken>& cancellation) {
-        if (cancellation) {
-            if (cancellation->requested()) return false;
-            return !cancellation->wait_for(delay);
-        }
         std::this_thread::sleep_for(delay);
-        return true;
+        return !cancellation || !cancellation->requested();
     };
     return hooks;
 }
