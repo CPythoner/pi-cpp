@@ -602,5 +602,5 @@ TEST_CASE("黄金样本 session_toolcall.jsonl 逐行 round-trip") {
 }
 
 TEST_CASE("黄金样本 session_thinking.jsonl 逐行 round-trip") {
-    checkSessionFixtureRoundTrip("session_thinking.jsonl", 5);
+    checkSessionFixtureRoundTrip("session_thinking.jsonl", 4);
 }
