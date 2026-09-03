@@ -10,6 +10,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <memory>
@@ -369,13 +370,39 @@ TEST_CASE("OpenAI provider never retries after any SSE stream data was emitted")
     CHECK_EQ(eventType(events.back()), "error");
 }
 
-TEST_CASE("OpenAI provider rejects excessive Retry-After delay") {
+TEST_CASE("OpenAI provider ignores maxRetryDelay like pi v0.80 openai path") {
     auto transport = std::make_shared<FakeHttpTransport>();
-    transport->response.status = 429;
-    transport->response.headers["Retry-After"] = "120";
+
+    detail::HttpResponse rateLimited;
+    rateLimited.status = 429;
+    rateLimited.headers["Retry-After"] = "120";
+    detail::HttpResponse success;
+    success.status = 200;
+    transport->responses = {rateLimited, success};
+    transport->chunkBatches = {{}, successfulChunks};
 
     auto options = authenticatedOptions();
     options.maxRetries = 1;
+    options.maxRetryDelay = std::chrono::milliseconds{1};
+    auto probe = std::make_shared<RetryProbe>();
+    detail::OpenAIProviderCore provider(transport, retryHooks(probe));
+
+    auto stream = provider.stream(makeModel(), makeContext(), options);
+    CHECK_EQ(stream.result().stopReason, ai::StopReason::Stop);
+    CHECK_EQ(transport->calls(), 2);
+
+    const auto delays = retryDelays(probe);
+    REQUIRE_EQ(delays.size(), 1);
+    CHECK_EQ(delays[0], std::chrono::milliseconds{120000});
+}
+
+TEST_CASE("x-should-retry false suppresses retry for server error") {
+    auto transport = std::make_shared<FakeHttpTransport>();
+    transport->response.status = 503;
+    transport->response.headers["x-should-retry"] = "false";
+
+    auto options = authenticatedOptions();
+    options.maxRetries = 3;
     auto probe = std::make_shared<RetryProbe>();
     detail::OpenAIProviderCore provider(transport, retryHooks(probe));
 
@@ -383,9 +410,6 @@ TEST_CASE("OpenAI provider rejects excessive Retry-After delay") {
     const auto result = stream.result();
 
     CHECK_EQ(result.stopReason, ai::StopReason::Error);
-    REQUIRE(result.errorMessage.has_value());
-    CHECK(result.errorMessage->find("120000ms") != std::string::npos);
-    CHECK(result.errorMessage->find("60000ms") != std::string::npos);
     CHECK_EQ(transport->calls(), 1);
     CHECK(retryDelays(probe).empty());
 }
