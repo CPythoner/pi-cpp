@@ -52,12 +52,12 @@ pi::coding_agent
 | 版本 | 主题 | 状态 |
 |---|---|---|
 | v0.0.1 | 骨架 + 核心类型 + 三层 SDK 边界 | ✅ Final closeout 完成 |
-| v0.0.2 | Provider / SSE + 真实差分测试基座 | 🚧 closeout — T0/T1/T2/T3 完成 |
+| v0.0.2 | Provider / SSE + 真实差分测试基座 | ✅ Final closeout 完成 |
 | v0.0.3 | Agent 主循环 | 待开始 |
 | v0.0.4 | coding-agent 工具四件套 | 待开始 |
 | v0.1.0 | print MVP + Stable Session Wire | 待开始 |
 
-完整路线见 [docs/dev-plan.md](docs/dev-plan.md)；当前版本设计见 [docs/design/v0.0.2.md](docs/design/v0.0.2.md)；v0.0.1 设计与最终验收见 [docs/design/v0.0.1.md](docs/design/v0.0.1.md) 和 [docs/closeout/v0.0.1.md](docs/closeout/v0.0.1.md)。
+完整路线见 [docs/dev-plan.md](docs/dev-plan.md)；v0.0.2 设计与最终验收见 [docs/design/v0.0.2.md](docs/design/v0.0.2.md) 和 [docs/closeout/v0.0.2.md](docs/closeout/v0.0.2.md)；v0.0.1 记录见 [docs/design/v0.0.1.md](docs/design/v0.0.1.md) 和 [docs/closeout/v0.0.1.md](docs/closeout/v0.0.1.md)。
 
 ## 构建
 
@@ -73,7 +73,7 @@ ctest --preset release
 ./build/release/picpp --version
 ```
 
-当前 `feature/v0.0.2` 分支构建输出：
+当前源码构建输出：
 
 ```text
 picpp v0.0.2
