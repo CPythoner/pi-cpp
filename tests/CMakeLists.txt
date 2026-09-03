@@ -3,6 +3,8 @@
 
 function(picpp_add_test name src)
     add_executable(${name} "${src}" "${CMAKE_CURRENT_SOURCE_DIR}/test_main.cpp")
+    # 源码目录宏（fixtures 等测试数据的定位）
+    target_compile_definitions(${name} PRIVATE PI_TESTS_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     target_link_libraries(${name} PRIVATE doctest pi_types)
     add_test(NAME ${name} COMMAND ${name})
 endfunction()

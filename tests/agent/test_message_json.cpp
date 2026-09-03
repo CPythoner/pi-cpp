@@ -4,10 +4,12 @@
 
 #include <cstdint>
 #include <cstddef>
+#include <fstream>
 #include <optional>
 #include <string>
 #include <utility>
 #include <variant>
+#include <vector>
 
 #include "agent/message.hpp"
 
@@ -542,4 +544,63 @@ TEST_CASE("AgentMessage 缺省字段容忍（WITH_DEFAULT 语义）") {
     REQUIRE(um != nullptr);
     CHECK(um->timestamp == 0);
     CHECK(std::get<std::string>(um->content) == "hi");
+}
+
+// ---- T10 黄金样本 JSONL ----
+
+namespace {
+
+std::vector<std::string> readFixtureLines(const std::string& name) {
+    const std::string path = std::string(PI_TESTS_DIR) + "/fixtures/" + name;
+    std::ifstream in(path);
+    INFO("fixture 打开失败: " << path);
+    REQUIRE(in.is_open());
+
+    std::vector<std::string> lines;
+    std::string line;
+    while (std::getline(in, line)) {
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        if (!line.empty()) lines.push_back(line);
+    }
+    return lines;
+}
+
+void checkSessionFixtureRoundTrip(const std::string& name, std::size_t expectedLines) {
+    const auto lines = readFixtureLines(name);
+    REQUIRE(lines.size() == expectedLines);
+
+    for (const auto& line : lines) {
+        const nlohmann::json entry = nlohmann::json::parse(line);   // 每行必须是合法 JSON
+        REQUIRE(entry.is_object());
+        REQUIRE(entry.contains("type"));
+
+        if (entry.at("type") == "session") {
+            // header 行：JSON 级 round-trip
+            CHECK(nlohmann::json::parse(entry.dump()) == entry);
+            continue;
+        }
+
+        REQUIRE(entry.at("type") == "message");
+        REQUIRE(entry.contains("message"));
+        const nlohmann::json& jmsg = entry.at("message");
+        REQUIRE(jmsg.contains("role"));   // role 可解析为 AgentMessage
+
+        const pi::AgentMessage m = jmsg.get<pi::AgentMessage>();
+        const nlohmann::json jrt = m;     // dump 回 JSON
+        CHECK(jrt == jmsg);               // 语义相等（nlohmann 对象比较，非字节比较）
+    }
+}
+
+} // namespace
+
+TEST_CASE("黄金样本 session_minimal.jsonl 逐行 round-trip") {
+    checkSessionFixtureRoundTrip("session_minimal.jsonl", 3);
+}
+
+TEST_CASE("黄金样本 session_toolcall.jsonl 逐行 round-trip") {
+    checkSessionFixtureRoundTrip("session_toolcall.jsonl", 4);
+}
+
+TEST_CASE("黄金样本 session_thinking.jsonl 逐行 round-trip") {
+    checkSessionFixtureRoundTrip("session_thinking.jsonl", 5);
 }
