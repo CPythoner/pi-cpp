@@ -1,21 +1,6 @@
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
-const referenceRoot = process.env.PI_REFERENCE_ROOT;
-const baseUrl = process.argv[2];
-
-if (!referenceRoot) {
-  throw new Error("PI_REFERENCE_ROOT is required");
-}
-if (!baseUrl) {
-  throw new Error("usage: runner.ts <base-url>");
-}
-
-const moduleUrl = pathToFileURL(
-  path.join(referenceRoot, "packages", "ai", "src", "api", "openai-completions.ts"),
-).href;
-const { stream } = await import(moduleUrl);
-
 function normalizeThoughtSignature(value: unknown): unknown {
   if (typeof value !== "string") return value;
   try {
@@ -108,42 +93,64 @@ function normalizeEvent(event: any): Record<string, unknown> {
   return result;
 }
 
-const model: any = {
-  id: "gpt-ref",
-  name: "GPT Reference",
-  api: "openai-completions",
-  provider: "openai",
-  baseUrl,
-  reasoning: false,
-  input: ["text"],
-  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-  contextWindow: 128000,
-  maxTokens: 4096,
-};
+async function main(): Promise<void> {
+  const referenceRoot = process.env.PI_REFERENCE_ROOT;
+  const baseUrl = process.argv[2];
 
-const context: any = {
-  systemPrompt: "You are concise.",
-  messages: [
-    {
-      role: "user",
-      content: "hello",
-      timestamp: 1,
-    },
-  ],
-  tools: [
-    {
-      name: "read",
-      description: "Read a file",
-      parameters: {
-        type: "object",
-        properties: { path: { type: "string" } },
-        required: ["path"],
+  if (!referenceRoot) {
+    throw new Error("PI_REFERENCE_ROOT is required");
+  }
+  if (!baseUrl) {
+    throw new Error("usage: runner.ts <base-url>");
+  }
+
+  const moduleUrl = pathToFileURL(
+    path.join(referenceRoot, "packages", "ai", "src", "api", "openai-completions.ts"),
+  ).href;
+  const { stream } = await import(moduleUrl);
+
+  const model: any = {
+    id: "gpt-ref",
+    name: "GPT Reference",
+    api: "openai-completions",
+    provider: "openai",
+    baseUrl,
+    reasoning: false,
+    input: ["text"],
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: 128000,
+    maxTokens: 4096,
+  };
+
+  const context: any = {
+    systemPrompt: "You are concise.",
+    messages: [
+      {
+        role: "user",
+        content: "hello",
+        timestamp: 1,
       },
-    },
-  ],
-};
+    ],
+    tools: [
+      {
+        name: "read",
+        description: "Read a file",
+        parameters: {
+          type: "object",
+          properties: { path: { type: "string" } },
+          required: ["path"],
+        },
+      },
+    ],
+  };
 
-const events = stream(model, context, { apiKey: "test-key", maxRetries: 0 });
-for await (const event of events) {
-  process.stdout.write(`${JSON.stringify(normalizeEvent(event))}\n`);
+  const events = stream(model, context, { apiKey: "test-key", maxRetries: 0 });
+  for await (const event of events) {
+    process.stdout.write(`${JSON.stringify(normalizeEvent(event))}\n`);
+  }
 }
+
+void main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
