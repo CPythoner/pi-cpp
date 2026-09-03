@@ -3,6 +3,7 @@
 #include <pi/ai/cancellation.hpp>
 
 #include <chrono>
+#include <cstdint>
 #include <functional>
 #include <map>
 #include <memory>
