@@ -51,13 +51,13 @@ pi::coding_agent
 
 | 版本 | 主题 | 状态 |
 |---|---|---|
-| v0.0.1 | 骨架 + 核心类型 + 三层 SDK 边界 | ✅ Final closeout 完成，tag 待重指向最终 commit |
-| v0.0.2 | Provider / SSE + 真实差分测试基座 | 待开始 |
+| v0.0.1 | 骨架 + 核心类型 + 三层 SDK 边界 | ✅ Final closeout 完成 |
+| v0.0.2 | Provider / SSE + 真实差分测试基座 | 🚧 进行中 — T1 CancellationToken 加固完成 |
 | v0.0.3 | Agent 主循环 | 待开始 |
 | v0.0.4 | coding-agent 工具四件套 | 待开始 |
 | v0.1.0 | print MVP + Stable Session Wire | 待开始 |
 
-完整路线见 [docs/dev-plan.md](docs/dev-plan.md)；v0.0.1 设计见 [docs/design/v0.0.1.md](docs/design/v0.0.1.md)，最终验收记录见 [docs/closeout/v0.0.1.md](docs/closeout/v0.0.1.md)。
+完整路线见 [docs/dev-plan.md](docs/dev-plan.md)；当前版本设计见 [docs/design/v0.0.2.md](docs/design/v0.0.2.md)；v0.0.1 设计与最终验收见 [docs/design/v0.0.1.md](docs/design/v0.0.1.md) 和 [docs/closeout/v0.0.1.md](docs/closeout/v0.0.1.md)。
 
 ## 构建
 
@@ -73,10 +73,10 @@ ctest --preset release
 ./build/release/picpp --version
 ```
 
-输出：
+当前 `main` 输出：
 
 ```text
-picpp v0.0.1
+picpp v0.0.2
 ```
 
 ## 本地要求
