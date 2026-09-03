@@ -221,7 +221,11 @@ RetryDecision makeRetryDecision(
         return decision;
     }
 
-    const bool retryableTransport = response.errorKind == HttpErrorKind::Transport;
+    // openai-node retries connection/fetch failures that happen before a
+    // Response exists. Once an HTTP status is known, body-stream failures are
+    // handled by the stream and must not replay the request.
+    const bool retryableTransport =
+        response.errorKind == HttpErrorKind::Transport && response.status == 0;
     const bool retryableStatus =
         response.errorKind == HttpErrorKind::None && shouldRetryHttpResponse(response);
     if (!retryableTransport && !retryableStatus) return decision;
