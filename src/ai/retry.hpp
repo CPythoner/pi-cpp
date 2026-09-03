@@ -19,8 +19,10 @@ struct RetryHooks {
 
     std::function<Clock::time_point()> now;
     std::function<double()> randomUnit;
-    // Returns false when the wait was cancelled and the request should abort.
-    // The hook is injectable so deterministic tests never need real sleeps.
+    // Returns false when cancellation should terminate retry before another HTTP
+    // attempt. The default hook mirrors openai-node 6.26.0: the delay itself is
+    // not interrupted; cancellation is observed after the delay and before the
+    // next request. Injection keeps deterministic tests free of real sleeps.
     std::function<bool(
         std::chrono::milliseconds,
         const std::shared_ptr<CancellationToken>&)> sleep;
