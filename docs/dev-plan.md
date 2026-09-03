@@ -2,7 +2,7 @@
 
 > **For agentic workers:** 本文档是主路线图。每个版本启动时，先把该版本拆解为任务级实施计划（TDD、bite-sized tasks），再进入实现。各版本内的功能清单用 checkbox 跟踪。
 
-**目标：** 用 C++17 实现 pi agent（github.com/earendil-works/pi，TS monorepo）的核心功能，并把 `pi-ai`、`pi-agent-core`、`pi-coding-agent` 三层都建设成可独立供外部 C++ 项目调用的 SDK；`picpp` CLI/TUI 只是这些 SDK 的一个官方前端。行为语义基线固定为 pi `v0.80.0`；Tau `v0.4.1` 仅作为实现参考。
+**目标：** 用 C++17 实现 pi agent（github.com/earendil-works/pi，TS monorepo）的核心功能，并把 `ai`、`agent`、`coding-agent` 三层都建设成可独立供外部 C++ 项目调用的 SDK；`picpp` CLI/TUI 只是这些 SDK 的一个官方前端。行为语义基线固定为 pi `v0.80.0`；Tau `v0.4.1` 仅作为实现参考。
 
 项目目标不是一次性复制 pi `v0.80.0` 的全部 Provider、认证和扩展实现，而是对路线图承诺的核心 Agent / Coding Agent 能力做到可验证的行为兼容，并在 `v0.3.0` 前完成核心功能面，在 `v1.0.0` 冻结稳定对外契约。
 
@@ -17,9 +17,10 @@
 | 行为语义基线 | **pi `v0.80.0`**；计划内能力的 API、CLI、事件、会话、工具调用及 wire 语义以该 tag 的可观察行为为准 |
 | Tau 参考版本 | **Tau `v0.4.1`**；只参考模块拆分、算法和工程实现，不作为行为规范来源 |
 | 兼容目标 | **核心能力子集兼容**，不是 pi `v0.80.0` 全功能克隆；Compatibility Matrix 标记 Compatible / Partial / Planned / Out of Scope |
-| SDK 形态 | `pi-ai` → `pi-agent-core` → `pi-coding-agent` 三层都是独立 CMake library / SDK；CLI/TUI 只能依赖 SDK，不反向渗透业务逻辑 |
-| 公共头文件 | 所有对外 API 放 `include/pi/...`；`src/` 只放实现与 private headers，不再把 `src/` 作为 PUBLIC include path |
-| CMake target | `pi_ai` (`pi::ai`) → `pi_agent_core` (`pi::agent_core`) → `pi_coding_agent` (`pi::coding_agent`)；`picpp` PRIVATE link `pi::coding_agent` |
+| SDK 形态 | `ai` → `agent` → `coding-agent` 三层都是独立 CMake library / SDK；CLI/TUI 只能依赖 SDK，不反向渗透业务逻辑 |
+| 公共头文件 | 所有对外 API 放 `include/pi/...`；对应 `include/pi/ai`、`include/pi/agent`、`include/pi/coding-agent`；`src/` 只放实现与 private headers |
+| CMake target | `pi_ai` (`pi::ai`) → `pi_agent` (`pi::agent`) → `pi_coding_agent` (`pi::coding-agent`)；`picpp` PRIVATE link `pi::coding-agent` |
+| C++ namespace | `pi::ai`、`pi::agent`、`pi::coding_agent`；`coding-agent` 是模块/目录/CMake 导出名，C++ 标识符使用 `coding_agent` |
 | 语言标准 | **C++17**；GCC 9+ / Clang 7+ / VS2019+；不依赖 coroutine/modules |
 | UI 形态 | `v0.1.0` print MVP → `v0.1.1` REPL → `v0.2.0` TUI；CLI/TUI 始终只是 SDK consumer |
 | Provider 策略 | `v0.0.2` OpenAI Chat Completions compatible；`v0.1.3` Anthropic Messages；其他协议按需后续扩展 |
@@ -51,9 +52,9 @@ pi `v0.80.0` 与 Tau `v0.4.1` 并非同期基线。本项目采用“**pi 定义
 
 | 能力面 | v1.0.0 目标状态 | 计划里程碑 |
 |---|---|---|
-| `pi-ai` public SDK | Compatible / Stable API | v0.0.2 建边界，v0.3.0 API freeze candidate |
-| `pi-agent-core` public SDK | Compatible / Stable API | v0.0.3 完成主干，v0.3.0 freeze candidate |
-| `pi-coding-agent` public SDK | Compatible / Stable API | v0.1.x–v0.2.x 完成主干，v0.3.0 freeze candidate |
+| `ai` public SDK | Compatible / Stable API | v0.0.2 建边界，v0.3.0 API freeze candidate |
+| `agent` public SDK | Compatible / Stable API | v0.0.3 完成主干，v0.3.0 freeze candidate |
+| `coding-agent` public SDK | Compatible / Stable API | v0.1.x–v0.2.x 完成主干，v0.3.0 freeze candidate |
 | AgentMessage / AgentEvent wire | Compatible | v0.0.2+ differential gate |
 | Agent runLoop | Compatible | v0.0.3 |
 | read/write/edit/bash | Compatible | v0.0.4 |
@@ -88,14 +89,14 @@ pi `v0.80.0` 与 Tau `v0.4.1` 并非同期基线。本项目采用“**pi 定义
 
 ## 2. 参考蓝本与核心移植原则
 
-**pi `v0.80.0`**：核心包包括 ai / agent / coding-agent / tui。Agent 核心是 runLoop 双层循环、AgentEvent 事件流和 JSONL 树状 session。默认 coding tools 是 read/write/edit/bash，同时已有 grep/find/ls 等能力。
+**pi `v0.80.0`**：核心包包括 `ai` / `agent` / `coding-agent` / `tui`。本项目沿用前三个核心包名称，减少与上游映射时的额外术语。Agent 核心是 runLoop 双层循环、AgentEvent 事件流和 JSONL 树状 session。默认 coding tools 是 read/write/edit/bash，同时已有 grep/find/ls 等能力。
 
 **Tau `v0.4.1`**：Python 参考实现更紧凑，适合辅助理解 SSE、主循环和模块组织，但任何 wire/行为兼容结论必须回到 pi `v0.80.0` 验证。
 
 关键原则：
 
 1. 普通 Provider/Tool 错误不能让 Agent 主进程崩溃，应转成可观察的 error message/result。
-2. 消息分层：LLM/provider 类型属于 `pi-ai`；AgentMessage/AgentEvent 属于 `pi-agent-core`；session/coding-domain 类型属于 `pi-coding-agent`。
+2. 消息分层：LLM/provider 类型属于 `ai`；AgentMessage/AgentEvent 属于 `agent`；session/coding-domain 类型属于 `coding-agent`。
 3. session 是 append-only JSONL 树；fork/branch/compaction 追加 entry，不重写历史。
 4. 工具默认可并行；需要顺序语义的工具或文件 mutation 显式串行。
 5. steering / follow-up 是两条可积压队列，支持 one-at-a-time / all drain，不能实现成单槽。
@@ -112,19 +113,19 @@ pi `v0.80.0` 与 Tau `v0.4.1` 并非同期基线。本项目采用“**pi 定义
 external app / picpp CLI / picpp TUI
                  │
                  ▼
-        pi-coding-agent SDK
+          coding-agent SDK
                  │
                  ▼
-         pi-agent-core SDK
+              agent SDK
                  │
                  ▼
-             pi-ai SDK
+                ai SDK
 ```
 
 依赖只能向下，不允许：
 
-- `pi-ai` include `pi-agent-core` / `pi-coding-agent`。
-- `pi-agent-core` include `pi-coding-agent`。
+- `ai` include `agent` / `coding-agent`。
+- `agent` include `coding-agent`。
 - SDK public header include CLI/TUI header。
 - SDK public API 暴露 `src/...` private type。
 
@@ -139,20 +140,20 @@ pi-cpp/
 │   └── install.cmake
 ├── include/
 │   └── pi/
-│       ├── ai/                         # pi-ai PUBLIC API
+│       ├── ai/                         # ai PUBLIC API, namespace pi::ai
 │       │   ├── message.hpp
 │       │   ├── model.hpp
 │       │   ├── provider.hpp
 │       │   ├── events.hpp
 │       │   ├── event_stream.hpp
 │       │   └── cancellation.hpp
-│       ├── agent/                      # pi-agent-core PUBLIC API
+│       ├── agent/                      # agent PUBLIC API, namespace pi::agent
 │       │   ├── message.hpp
 │       │   ├── events.hpp
 │       │   ├── tool.hpp
 │       │   ├── agent.hpp
 │       │   └── queue_mode.hpp
-│       └── coding/                     # pi-coding-agent PUBLIC API
+│       └── coding-agent/               # coding-agent PUBLIC API, namespace pi::coding_agent
 │           ├── coding_agent.hpp
 │           ├── config.hpp
 │           ├── model_catalog.hpp
@@ -161,19 +162,19 @@ pi-cpp/
 │           ├── tools.hpp
 │           └── extension.hpp           # 到 v0.2.2 再开放
 ├── src/
-│   ├── ai/                             # pi-ai implementation/private details
+│   ├── ai/                             # ai implementation/private details
 │   │   ├── openai_compatible.cpp
 │   │   ├── anthropic.cpp
 │   │   ├── stream_canon.cpp
 │   │   ├── retry.cpp
 │   │   ├── http.cpp
 │   │   └── detail/
-│   ├── agent/                          # pi-agent-core implementation
+│   ├── agent/                          # agent implementation
 │   │   ├── agent.cpp
 │   │   ├── agent_loop.cpp
 │   │   ├── tool_history.cpp
 │   │   └── detail/
-│   └── coding/                         # pi-coding-agent implementation
+│   └── coding-agent/                   # coding-agent implementation
 │       ├── tools/
 │       ├── session/
 │       ├── compaction.cpp
@@ -182,7 +183,7 @@ pi-cpp/
 │       ├── catalog.cpp
 │       └── detail/
 ├── apps/
-│   └── picpp/                          # 官方 CLI/TUI，只消费 pi::coding_agent
+│   └── picpp/                          # 官方 CLI/TUI，只消费 coding-agent public API
 │       ├── main.cpp
 │       ├── print_mode.cpp
 │       ├── repl.cpp
@@ -191,16 +192,22 @@ pi-cpp/
 ├── tests/
 │   ├── ai/
 │   ├── agent/
-│   ├── coding/
+│   ├── coding-agent/
 │   ├── consumer/                       # 外部消费者编译测试
 │   ├── fixtures/pi-v0.80.0/
 │   └── differential/
 ├── examples/
-│   ├── ai_chat/
-│   ├── agent_core/
-│   └── coding_agent/
+│   ├── ai/
+│   ├── agent/
+│   └── coding-agent/
 └── docs/
 ```
+
+这里刻意区分：
+
+- **模块/目录名**严格沿用上游：`ai`、`agent`、`coding-agent`。
+- **C++ namespace** 因 `-` 不能用于标识符，使用 `pi::ai`、`pi::agent`、`pi::coding_agent`。
+- **CMake exported target** 可保留模块名，使用 `pi::ai`、`pi::agent`、`pi::coding-agent`。
 
 ### 3.3 CMake target 与 SDK 消费契约
 
@@ -208,17 +215,17 @@ pi-cpp/
 
 ```cmake
 pi_ai           -> alias pi::ai
-pi_agent_core   -> alias pi::agent_core
-pi_coding_agent -> alias pi::coding_agent
+pi_agent        -> alias pi::agent
+pi_coding_agent -> alias pi::coding-agent
 picpp           -> executable
 ```
 
 依赖关系：
 
 ```cmake
-pi_agent_core   PUBLIC pi::ai
-pi_coding_agent PUBLIC pi::agent_core
-picpp           PRIVATE pi::coding_agent
+pi_agent        PUBLIC pi::ai
+pi_coding_agent PUBLIC pi::agent
+picpp           PRIVATE pi::coding-agent
 ```
 
 公共 include 目录必须使用：
@@ -234,8 +241,8 @@ target_include_directories(<sdk> PUBLIC
 
 SDK 至少支持两种消费方式：
 
-1. 仓库内/源码方式：`add_subdirectory(pi-cpp)` 后 `target_link_libraries(app PRIVATE pi::coding_agent)`。
-2. 安装包方式：`cmake --install` 后 `find_package(picpp CONFIG REQUIRED)`，再链接 `pi::ai` / `pi::agent_core` / `pi::coding_agent`。
+1. 仓库内/源码方式：`add_subdirectory(pi-cpp)` 后 `target_link_libraries(app PRIVATE pi::coding-agent)`。
+2. 安装包方式：`cmake --install` 后 `find_package(picpp CONFIG REQUIRED)`，再链接 `pi::ai` / `pi::agent` / `pi::coding-agent`。
 
 ### 3.4 Public API 纪律
 
@@ -251,10 +258,10 @@ SDK 至少支持两种消费方式：
 
 `v0.0.1` 的 `pi_types` + `src/` PUBLIC include 是骨架阶段临时结构，不作为长期架构。**在 v0.0.2 开始 Provider 开发前必须先迁移 SDK 边界**：
 
-1. 创建 `include/pi/ai`、`include/pi/agent`、`include/pi/coding`。
+1. 创建 `include/pi/ai`、`include/pi/agent`、`include/pi/coding-agent`。
 2. 把已属于 public contract 的 v0.0.1 types 从 `src/` 迁入对应 `include/pi/...`。
-3. 拆除 `pi_types`，形成 `pi_ai` / `pi_agent_core`，并预建 `pi_coding_agent` target。
-4. `src/` 从 PUBLIC include path 移除。
+3. 拆除 `pi_types`，形成 `pi_ai` / `pi_agent`，并预建 `pi_coding_agent` target。
+4. 将实现目录统一为 `src/ai`、`src/agent`、`src/coding-agent`；`src/` 从 PUBLIC include path 移除。
 5. 增加三个最小 consumer build tests，证明各 SDK 能独立被外部 target include/link。
 6. 后续新增 API 必须先判断 public/private，再决定进入 `include/` 还是 `src/`。
 
@@ -283,10 +290,10 @@ v0.0.1 已交付自研 CancellationToken；进入真实 HTTP 前必须加固：
 
 | 领域 | 选型 | 关键注意点 |
 |---|---|---|
-| HTTP+SSE | cpr/curl | cpr 只存在于 `pi-ai` implementation；不要泄漏到 public API；流式请求避免整体 wall-clock timeout |
+| HTTP+SSE | cpr/curl | cpr 只存在于 `ai` implementation；不要泄漏到 public API；流式请求避免整体 wall-clock timeout |
 | JSON | nlohmann/json | wire 类型字段省略/null/未知字段策略必须有 fixture 验证 |
-| 子进程 | reproc++ | 只存在于 coding implementation；Unix process group + Windows Job Object |
-| TUI | FTXUI | 只属于 `apps/picpp`；绝不能成为 `pi-coding-agent` SDK 依赖 |
+| 子进程 | reproc++ | 只存在于 `coding-agent` implementation；Unix process group + Windows Job Object |
+| TUI | FTXUI | 只属于 `apps/picpp`；绝不能成为 `coding-agent` SDK 依赖 |
 | 格式化 | fmt | 可用于实现，但 public API 尽量不暴露 fmt 类型 |
 | 测试 | doctest | SDK 单元测试 + consumer build tests + differential tests |
 | CLI | cxxopts | 只属于 `apps/picpp` |
@@ -300,9 +307,9 @@ v0.0.1 已交付自研 CancellationToken；进入真实 HTTP 前必须加固：
 | 版本 | 成熟度 | 主题 | 交付标志 |
 |---|---|---|---|
 | v0.0.1 | 地基 | 骨架与核心类型 | 三平台 CI；基础 message/event types（已完成） |
-| v0.0.2 | 地基 | **SDK 边界 + Provider/SSE** | `pi::ai` / `pi::agent_core` 基础 target；OpenAI-compatible 真实流；differential 基座 |
-| v0.0.3 | 地基 | Agent 主循环 | `pi::agent_core` 可独立使用；多轮 tool loop + steering/followUp + abort |
-| v0.0.4 | 地基 | Coding 工具四件套 | `pi::coding_agent` 基础可用；read/write/edit/bash |
+| v0.0.2 | 地基 | **SDK 边界 + Provider/SSE** | `pi::ai` / `pi::agent` 基础 target；OpenAI-compatible 真实流；differential 基座 |
+| v0.0.3 | 地基 | Agent 主循环 | `agent` SDK 可独立使用；多轮 tool loop + steering/followUp + abort |
+| v0.0.4 | 地基 | Coding 工具四件套 | `coding-agent` SDK 基础可用；read/write/edit/bash |
 | v0.1.0 | **能用** | print MVP + Session schema | `picpp -p` 端到端；完整 SessionEntry；三层 SDK 可安装/消费 |
 | v0.1.1 | 能用 | REPL + resume | 三平台交互、会话恢复 |
 | v0.1.2 | 能用 | Session tree + compaction | fork/branch/tree + 长会话压缩 |
@@ -335,16 +342,17 @@ v0.0.1 已交付自研 CancellationToken；进入真实 HTTP 前必须加固：
 
 ### v0.0.2 — SDK 边界 + Provider 层与 SSE
 
-**目标：** 在继续增加功能前先建立正确的公开 API 边界；完成 `pi-ai` 第一条真实 Provider 流并建立 differential 基座。
+**目标：** 在继续增加功能前先建立正确的公开 API 边界；完成 `ai` 第一条真实 Provider 流并建立 differential 基座。
 
 **T0：SDK 边界重构**
 
-- [ ] 建立 `include/pi/ai`、`include/pi/agent`、`include/pi/coding`。
+- [ ] 建立 `include/pi/ai`、`include/pi/agent`、`include/pi/coding-agent`。
 - [ ] 将 v0.0.1 已公开类型迁移到正确 public header；实现留在 `src/`。
-- [ ] 拆 `pi_types`：建立 `pi_ai` (`pi::ai`) 与 `pi_agent_core` (`pi::agent_core`)；建立空/最小 `pi_coding_agent` target 为后续预留。
+- [ ] 拆 `pi_types`：建立 `pi_ai` (`pi::ai`) 与 `pi_agent` (`pi::agent`)；建立空/最小 `pi_coding_agent` (`pi::coding-agent`) target 为后续预留。
+- [ ] 将 implementation 目录规范为 `src/ai`、`src/agent`、`src/coding-agent`。
 - [ ] 移除 `src/` 的 PUBLIC include；private headers 只通过 PRIVATE include 使用。
-- [ ] 加 `tests/consumer/ai`、`agent`、`coding` 最小编译/链接测试。
-- [ ] 明确 namespace 与 include 形式：`#include <pi/ai/...>`、`<pi/agent/...>`、`<pi/coding/...>`。
+- [ ] 加 `tests/consumer/ai`、`agent`、`coding-agent` 最小编译/链接测试。
+- [ ] 明确 include 形式：`#include <pi/ai/...>`、`<pi/agent/...>`、`<pi/coding-agent/...>`。
 
 **T1：兼容测试基座**
 
@@ -357,9 +365,9 @@ v0.0.1 已交付自研 CancellationToken；进入真实 HTTP 前必须加固：
 
 - [ ] callback snapshot 后锁外执行。
 - [ ] callback 重入、unregister/request 并发、CombinedCancellation 析构竞态测试。
-- [ ] 把 cancellation 作为 `pi-ai` 可复用 public abstraction，不暴露 cpr/curl 类型。
+- [ ] 把 cancellation 作为 `ai` 可复用 public abstraction，不暴露 cpr/curl 类型。
 
-**T3：pi-ai Provider/SSE**
+**T3：ai Provider/SSE**
 
 - [ ] `<pi/ai/provider.hpp>`：Provider public interface。
 - [ ] `<pi/ai/events.hpp>` / `<pi/ai/event_stream.hpp>`：L1 event stream contract。
@@ -368,7 +376,7 @@ v0.0.1 已交付自研 CancellationToken；进入真实 HTTP 前必须加固：
 - [ ] `src/ai/stream_canon.cpp`：Start/Delta/End 归一化。
 - [ ] `src/ai/retry.cpp`：backoff/jitter/Retry-After/错误分类。
 - [ ] FakeProvider 作为 SDK 测试设施或 test support target。
-- [ ] `examples/ai_chat/`：只链接 `pi::ai` 的外部调用示例。
+- [ ] `examples/ai/`：只链接 `pi::ai` 的外部调用示例。
 
 **验收：**
 
@@ -380,7 +388,7 @@ v0.0.1 已交付自研 CancellationToken；进入真实 HTTP 前必须加固：
 
 ---
 
-### v0.0.3 — pi-agent-core / Agent 主循环
+### v0.0.3 — agent / Agent 主循环
 
 **目标：** 完成不依赖 coding tools 具体实现的通用 Agent SDK。
 
@@ -395,20 +403,20 @@ v0.0.1 已交付自研 CancellationToken；进入真实 HTTP 前必须加固：
 - [ ] tool batch 默认 parallel，支持 per-tool/global sequential。
 - [ ] abort/error 后可正确收尾并再次 prompt。
 - [ ] tool history repair。
-- [ ] `examples/agent_core/`：FakeProvider + test tool 构建独立 Agent，不依赖 coding-agent。
+- [ ] `examples/agent/`：FakeProvider + test tool 构建独立 Agent，不依赖 coding-agent。
 
-**验收：** `pi::agent_core` 可被外部 app 直接调用；多消息 queue、parallel/sequential、abort/error 差分测试通过。
+**验收：** `agent` SDK 可被外部 app 直接调用；多消息 queue、parallel/sequential、abort/error 差分测试通过。
 
 ---
 
-### v0.0.4 — pi-coding-agent / 工具四件套
+### v0.0.4 — coding-agent / 工具四件套
 
-**目标：** 在 `pi-agent-core` 上构建 coding domain SDK，达到真正修改代码的能力。
+**目标：** 在 `agent` 上构建 coding domain SDK，达到真正修改代码的能力。
 
 **功能：**
 
-- [ ] `<pi/coding/coding_agent.hpp>`：高层 CodingAgent facade，组合 Provider/Agent/tools/session/config。
-- [ ] `<pi/coding/tools.hpp>`：默认 tool factory / registry 的 public API；具体实现保持 private。
+- [ ] `<pi/coding-agent/coding_agent.hpp>`：高层 CodingAgent facade，组合 Provider/Agent/tools/session/config。
+- [ ] `<pi/coding-agent/tools.hpp>`：默认 tool factory / registry 的 public API；具体实现保持 private。
 - [ ] read：行范围、行号、截断、二进制策略。
 - [ ] write：整文件写入、父目录创建。
 - [ ] edit：唯一匹配、行尾保持、失败上下文、diff。
@@ -416,9 +424,9 @@ v0.0.1 已交付自研 CancellationToken；进入真实 HTTP 前必须加固：
 - [ ] file mutation queue。
 - [ ] beforeToolCall / afterToolCall hook。
 - [ ] tool schema validation。
-- [ ] `examples/coding_agent/`：外部 target 只链接 `pi::coding_agent` 完成 read→edit→bash。
+- [ ] `examples/coding-agent/`：外部 target 只链接 `pi::coding-agent` 完成 read→edit→bash。
 
-**验收：** CodingAgent SDK 能脱离 `picpp` executable 独立使用；CLI 以后不得绕过 SDK 直接调用 private coding implementation。
+**验收：** `coding-agent` SDK 能脱离 `picpp` executable 独立使用；CLI 以后不得绕过 SDK 直接调用 private coding-agent implementation。
 
 ---
 
@@ -432,13 +440,13 @@ v0.0.1 已交付自研 CancellationToken；进入真实 HTTP 前必须加固：
 
 - [ ] system prompt：tools/guidelines/AGENTS.md/cwd/date。
 - [ ] config：settings、custom OpenAI-compatible models、API key env。
-- [ ] `<pi/coding/session_entry.hpp>`：计划内完整 SessionEntry union：message、thinking_level_change、model_change、compaction、branch_summary、custom、custom_message、label、session_info 等。
+- [ ] `<pi/coding-agent/session_entry.hpp>`：计划内完整 SessionEntry union：message、thinking_level_change、model_change、compaction、branch_summary、custom、custom_message、label、session_info 等。
 - [ ] 尚未开放行为的 entry 至少能 parse/preserve/dump。
 - [ ] append-only JSONL storage。
 - [ ] `apps/picpp/print_mode.cpp`：`picpp -p`、`--model`、JSON event mode、退出码。
 - [ ] `install(TARGETS ...)` + `install(DIRECTORY include/)`。
 - [ ] `picppConfig.cmake` + exported targets，使 `find_package(picpp CONFIG REQUIRED)` 可用。
-- [ ] installed-tree consumer test：在临时外部 CMake 项目中分别链接 `pi::ai`、`pi::agent_core`、`pi::coding_agent`。
+- [ ] installed-tree consumer test：在临时外部 CMake 项目中分别链接 `pi::ai`、`pi::agent`、`pi::coding-agent`。
 
 **验收：** 临时项目用 CLI 可完成“改文件+测试”；另一个纯 C++ consumer 不使用 CLI 也能通过 SDK 完成同类流程；真实 pi session fixtures 可读取关键 entry。
 
@@ -456,7 +464,7 @@ v0.0.1 已交付自研 CancellationToken；进入真实 HTTP 前必须加固：
 - [ ] Windows VT + UTF-8；non-TTY 去色。
 - [ ] session id/parentId 基础 tree query。
 - [ ] `--continue` / `--resume <id>`。
-- [ ] REPL 只消费 `pi::coding_agent` public API / events，不复制 agent state machine。
+- [ ] REPL 只消费 `coding-agent` public API / events，不复制 agent state machine。
 
 **验收：** 三平台中文输入输出；interrupt→resume 完整；CLI 层无业务状态机复制。
 
@@ -473,7 +481,7 @@ v0.0.1 已交付自研 CancellationToken；进入真实 HTTP 前必须加固：
 - [ ] compaction：token 估算、手动/自动触发、CompactionEntry、LLM context 裁剪。
 - [ ] `/cost` `/context`。
 - [ ] 大 session 流式 tree/path 查询基础。
-- [ ] 对外 session API 通过 `<pi/coding/session.hpp>` 暴露，不让调用方依赖 storage implementation。
+- [ ] 对外 session API 通过 `<pi/coding-agent/session.hpp>` 暴露，不让调用方依赖 storage implementation。
 
 **验收：** 超长对话继续；两条分支独立；旧 JSONL 不重写；pi compaction/branch fixture 可兼容读取。
 
@@ -485,14 +493,14 @@ v0.0.1 已交付自研 CancellationToken；进入真实 HTTP 前必须加固：
 
 **功能：**
 
-- [ ] `pi-ai` Anthropic Messages SSE、thinking/signature、stop reason、usage。
+- [ ] `ai` Anthropic Messages SSE、thinking/signature、stop reason、usage。
 - [ ] thinking level 内部归一化，但 Provider wire 各自保持真实语义。
-- [ ] `pi-coding-agent` model catalog；**元数据以 pi `v0.80.0` 为第一来源**，Tau 仅参考文件组织。
+- [ ] `coding-agent` model catalog；**元数据以 pi `v0.80.0` 为第一来源**，Tau 仅参考文件组织。
 - [ ] 用户 catalog override。
 - [ ] runtime model switch + model_change entry。
 - [ ] compat flags 数据驱动化。
 
-**验收：** Anthropic + 至少两个 OpenAI-compatible endpoint；同 session 切模型；Provider 实现变化不破坏 `pi::agent_core` public API。
+**验收：** Anthropic + 至少两个 OpenAI-compatible endpoint；同 session 切模型；Provider 实现变化不破坏 `agent` public API。
 
 ---
 
@@ -512,7 +520,7 @@ v0.0.1 已交付自研 CancellationToken；进入真实 HTTP 前必须加固：
 - [ ] beforeToolCall approval UI。
 - [ ] theme + `--no-tui`。
 
-**验收：** `pi_ai` / `pi_agent_core` / `pi_coding_agent` targets 均不 link FTXUI；所有核心行为仍能在非 TUI consumer tests 回归。
+**验收：** `pi_ai` / `pi_agent` / `pi_coding_agent` targets 均不 link FTXUI；所有核心行为仍能在非 TUI consumer tests 回归。
 
 ---
 
@@ -527,7 +535,7 @@ v0.0.1 已交付自研 CancellationToken；进入真实 HTTP 前必须加固：
 - [ ] Agent/Coding events 以通知形式输出。
 - [ ] grep/find/ls。
 - [ ] ignore/path/truncation 行为按 pi 对齐；偏差则标 Partial。
-- [ ] RPC adapter 只调用 `pi::coding_agent` public API，不访问 private `src/coding`。
+- [ ] RPC adapter 只调用 `coding-agent` public API，不访问 private `src/coding-agent`。
 
 **验收：** harness 经 RPC 驱动完整流程；stdout 协议纯净、日志 stderr；大目录/取消测试通过。
 
@@ -546,7 +554,7 @@ v0.0.1 已交付自研 CancellationToken；进入真实 HTTP 前必须加固：
 - [ ] spawn/ready/timeout/cancel/crash/restart/disable 生命周期。
 - [ ] stdout protocol / stderr log 隔离。
 - [ ] permission-gate、subagent examples。
-- [ ] `<pi/coding/extension.hpp>` 只暴露稳定 host-side API；协议 parser private。
+- [ ] `<pi/coding-agent/extension.hpp>` 只暴露稳定 host-side API；协议 parser private。
 - [ ] Extension Compatibility Matrix。
 
 **验收：** extension crash 不拖垮主 agent；permission gate 能 block；subagent cancel 可控。
@@ -565,7 +573,7 @@ v0.0.1 已交付自研 CancellationToken；进入真实 HTTP 前必须加固：
 - [ ] configurable retry policy。
 - [ ] 大 session 流式读取/低峰值内存。
 - [ ] old fixture / corrupted tail / unknown entry-field compatibility tests。
-- [ ] skills/prompts 功能在 CLI/TUI/RPC 和纯 SDK consumer 中共享同一 coding layer。
+- [ ] skills/prompts 功能在 CLI/TUI/RPC 和纯 SDK consumer 中共享同一 coding-agent layer。
 
 **验收：** 大 session 可恢复；崩溃尾行不破坏历史；无 CLI-only 业务实现。
 
@@ -579,9 +587,9 @@ v0.0.1 已交付自研 CancellationToken；进入真实 HTTP 前必须加固：
 
 **准入条件：**
 
-- [ ] `pi-ai`：计划内 Provider/API/event/cancellation 主干完成。
-- [ ] `pi-agent-core`：runLoop、queue、tool execution、abort/error 主干 Compatible。
-- [ ] `pi-coding-agent`：默认工具、只读工具、session tree/compaction、config/catalog、extensions/skills 计划内能力完成或明确 Partial。
+- [ ] `ai`：计划内 Provider/API/event/cancellation 主干完成。
+- [ ] `agent`：runLoop、queue、tool execution、abort/error 主干 Compatible。
+- [ ] `coding-agent`：默认工具、只读工具、session tree/compaction、config/catalog、extensions/skills 计划内能力完成或明确 Partial。
 - [ ] print/REPL/TUI/RPC 已有稳定适配层。
 - [ ] 三层 SDK 均有 build-tree + install-tree external consumer tests。
 
@@ -639,7 +647,7 @@ v0.0.1 已交付自研 CancellationToken；进入真实 HTTP 前必须加固：
 - [ ] Compatibility Matrix 无未解释 Planned 项。
 - [ ] 三平台 executable artifact 可从干净机器运行。
 - [ ] `find_package(picpp CONFIG REQUIRED)` 在三平台干净 consumer 工程通过。
-- [ ] `pi::ai`、`pi::agent_core`、`pi::coding_agent` public headers/API 文档完整。
+- [ ] `pi::ai`、`pi::agent`、`pi::coding-agent` CMake targets 与三层 public headers/API 文档完整。
 - [ ] deterministic differential tests 全绿。
 - [ ] E2E smoke matrix 全绿。
 - [ ] CHANGELOG / README / migration / known deviations 完整。
@@ -650,7 +658,7 @@ v0.0.1 已交付自研 CancellationToken；进入真实 HTTP 前必须加固：
 
 ## 7. 测试策略
 
-1. **SDK 单元测试**：按 `ai/agent/coding` 分层；序列化、SSE、delta merge、session tree、cancel races、tools 等。
+1. **SDK 单元测试**：按 `ai` / `agent` / `coding-agent` 分层；序列化、SSE、delta merge、session tree、cancel races、tools 等。
 2. **Public consumer tests**：每层至少一个独立 target，只 include `<pi/...>`，不允许添加 `src/` include path。
 3. **Install-tree tests**：安装后新建干净 CMake consumer，用 `find_package(picpp CONFIG REQUIRED)` 编译运行。
 4. **pi 真实黄金样本**：固定 `v0.80.0` tag，记录生成来源与 commit。
@@ -672,10 +680,10 @@ v0.0.1 已交付自研 CancellationToken；进入真实 HTTP 前必须加固：
 每个 PR 至少满足：
 
 - public header self-contained：单独 include 可编译。
-- `pi::ai` consumer 不链接 agent/coding。
-- `pi::agent_core` consumer 不链接 coding。
-- `pi::coding_agent` consumer 不需要 CLI/TUI。
-- `apps/picpp` 不 include `src/ai` / `src/agent` / `src/coding` private headers。
+- `pi::ai` consumer 不链接 agent/coding-agent。
+- `pi::agent` consumer 不链接 coding-agent。
+- `pi::coding-agent` CMake consumer 不需要 CLI/TUI。
+- `apps/picpp` 不 include `src/ai` / `src/agent` / `src/coding-agent` private headers。
 - 安装/导出相关改动必须跑 install-tree smoke test。
 
 ---
@@ -699,7 +707,7 @@ v0.0.1 已交付自研 CancellationToken；进入真实 HTTP 前必须加固：
 |---|---|---|
 | SDK 边界晚拆导致 CLI 与核心耦合 | 高 | v0.0.2 第一优先级迁移 `include/` + 三 target；后续 consumer test 强制守边界 |
 | `src/` 被当 public API 继续扩散 | 高 | 禁止 PUBLIC include src；public-header lint/consumer build test |
-| 三层依赖形成循环 | 高 | 固定 `pi-ai → pi-agent-core → pi-coding-agent` 单向依赖；CMake target graph 检查 |
+| 三层依赖形成循环 | 高 | 固定 `ai → agent → coding-agent` 单向依赖；CMake target graph 检查 |
 | public API 泄漏 cpr/reproc/FTXUI | 高 | 第三方类型默认 private；public abstraction 独立设计 |
 | “兼容 pi”范围失控 | 高 | Compatibility Matrix + Planned/Out-of-Scope |
 | 只靠源码阅读误判语义 | 高 | v0.0.2 起固定 differential harness |
@@ -722,7 +730,7 @@ v0.0.1 已交付自研 CancellationToken；进入真实 HTTP 前必须加固：
 ### 10.1 每版本工作流
 
 1. **基线取证**：先确定 pi `v0.80.0` 对应源码、fixture 和可观察行为。
-2. **Public API 识别**：设计阶段先划分哪些类型/API 属于 `pi-ai`、`pi-agent-core`、`pi-coding-agent` public contract，哪些必须 private。
+2. **Public API 识别**：设计阶段先划分哪些类型/API 属于 `ai`、`agent`、`coding-agent` public contract，哪些必须 private。
 3. **设计先行**：完成 `docs/design/vX.Y.Z.md`，写清机制、候选方案、pi 行为、C++ SDK/API、已知偏差。
 4. **TDD 拆解**：兼容任务先写 differential red test；SDK API 先写 consumer compile test。
 5. **实现**：小步提交；业务功能只能进入 SDK，CLI/TUI 只做 adapter/rendering/input。
@@ -742,9 +750,9 @@ v0.0.1 已交付自研 CancellationToken；进入真实 HTTP 前必须加固：
 ### 10.3 SDK-first 原则
 
 - 新能力先问“外部 C++ 调用者如何用”，再问 CLI 怎么展示。
-- `picpp` 能做的核心业务操作，原则上都应有对应 `pi::coding_agent` API。
-- `pi-agent-core` 应能脱离 coding tools 独立驱动通用 Agent。
-- `pi-ai` 应能脱离 Agent 独立做 Provider streaming。
+- `picpp` 能做的核心业务操作，原则上都应有对应 `coding-agent` public API。
+- `agent` 应能脱离 coding tools 独立驱动通用 Agent。
+- `ai` 应能脱离 Agent 独立做 Provider streaming。
 - CLI/TUI/RPC 都是 adapter，不拥有核心状态机。
 
 ### 10.4 版本纪律
