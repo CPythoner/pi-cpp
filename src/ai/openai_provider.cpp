@@ -198,9 +198,9 @@ AssistantMessageEventStream OpenAIProviderCore::stream(
                     request.connectTimeout = *request.timeout;
                 }
 
+                // pi v0.80.0 passes maxRetries into openai-node 6.26.0 for this
+                // path, but does not apply StreamOptions::maxRetryDelay here.
                 const std::size_t maxRetries = optionsCopy.maxRetries.value_or(0);
-                const auto maxRetryDelay = optionsCopy.maxRetryDelay.value_or(
-                    std::chrono::seconds{60});
                 std::size_t retriesPerformed = 0;
 
                 for (;;) {
@@ -224,14 +224,8 @@ AssistantMessageEventStream OpenAIProviderCore::stream(
                         decoder->started(),
                         retriesPerformed,
                         maxRetries,
-                        maxRetryDelay,
                         now,
                         randomUnit);
-
-                    if (retry.rejectionMessage) {
-                        decoder->fail(*retry.rejectionMessage);
-                        return;
-                    }
 
                     if (retry.retry) {
                         const bool waited = retryHooks.sleep
