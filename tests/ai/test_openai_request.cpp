@@ -7,6 +7,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -122,6 +123,101 @@ TEST_CASE("OpenAI request builder maps multimodal user content to data URI parts
     CHECK_EQ(parts[0].at("text"), "describe this");
     CHECK_EQ(parts[1].at("type"), "image_url");
     CHECK_EQ(parts[1]["image_url"].at("url"), "data:image/png;base64,aGVsbG8=");
+}
+
+TEST_CASE("OpenAI request builder replays thinking by its signature field") {
+    ai::Context context;
+    ai::AssistantMessage assistant;
+    assistant.provider = "openai";
+    assistant.content.emplace_back(ai::ThinkingContent{
+        "first thought",
+        std::optional<std::string>{"reasoning_content"},
+        false,
+    });
+    assistant.content.emplace_back(ai::ThinkingContent{
+        "second thought",
+        std::optional<std::string>{"other_signature"},
+        false,
+    });
+    assistant.content.emplace_back(ai::TextContent{"answer", std::nullopt});
+    context.messages.emplace_back(std::move(assistant));
+
+    const auto request = detail::buildOpenAiChatCompletionsRequest(
+        makeModel(),
+        context,
+        ai::StreamOptions{});
+
+    const auto& message = request.at("messages")[0];
+    CHECK_EQ(message.at("role"), "assistant");
+    CHECK_EQ(message.at("content"), "answer");
+    CHECK_EQ(message.at("reasoning_content"), "first thought\nsecond thought");
+    CHECK_FALSE(message.contains("other_signature"));
+}
+
+TEST_CASE("OpenAI request builder normalizes opencode reasoning signature") {
+    ai::Context context;
+    ai::AssistantMessage assistant;
+    assistant.provider = "opencode-go";
+    assistant.content.emplace_back(ai::ThinkingContent{
+        "thought",
+        std::optional<std::string>{"reasoning"},
+        false,
+    });
+    assistant.content.emplace_back(ai::TextContent{"answer", std::nullopt});
+    context.messages.emplace_back(std::move(assistant));
+
+    const auto request = detail::buildOpenAiChatCompletionsRequest(
+        makeModel(),
+        context,
+        ai::StreamOptions{});
+
+    const auto& message = request.at("messages")[0];
+    CHECK_EQ(message.at("reasoning_content"), "thought");
+    CHECK_FALSE(message.contains("reasoning"));
+}
+
+TEST_CASE("OpenAI request builder restores JSON tool reasoning details") {
+    ai::Context context;
+    ai::AssistantMessage assistant;
+    assistant.content.emplace_back(ai::ToolCall{
+        "call-1",
+        "read",
+        nlohmann::json::object(),
+        std::optional<std::string>{
+            R"({"type":"reasoning.encrypted","id":"call-1","data":"opaque"})"},
+    });
+    context.messages.emplace_back(std::move(assistant));
+
+    const auto request = detail::buildOpenAiChatCompletionsRequest(
+        makeModel(),
+        context,
+        ai::StreamOptions{});
+
+    const auto& message = request.at("messages")[0];
+    REQUIRE(message.contains("reasoning_details"));
+    REQUIRE_EQ(message.at("reasoning_details").size(), 1);
+    CHECK_EQ(message["reasoning_details"][0].at("type"), "reasoning.encrypted");
+    CHECK_EQ(message["reasoning_details"][0].at("id"), "call-1");
+    CHECK_EQ(message["reasoning_details"][0].at("data"), "opaque");
+}
+
+TEST_CASE("OpenAI request builder ignores opaque non-JSON tool signatures") {
+    ai::Context context;
+    ai::AssistantMessage assistant;
+    assistant.content.emplace_back(ai::ToolCall{
+        "call-1",
+        "read",
+        nlohmann::json::object(),
+        std::optional<std::string>{"opaque-google-signature"},
+    });
+    context.messages.emplace_back(std::move(assistant));
+
+    const auto request = detail::buildOpenAiChatCompletionsRequest(
+        makeModel(),
+        context,
+        ai::StreamOptions{});
+
+    CHECK_FALSE(request.at("messages")[0].contains("reasoning_details"));
 }
 
 TEST_CASE("OpenAI request builder omits optional fields when not requested") {
