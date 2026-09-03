@@ -27,6 +27,7 @@ picpp_add_test(test_cancel_token "${CMAKE_CURRENT_SOURCE_DIR}/util/test_cancel_t
 picpp_add_test(test_event_stream "${CMAKE_CURRENT_SOURCE_DIR}/ai/test_event_stream.cpp" pi::ai)
 picpp_add_test(test_provider "${CMAKE_CURRENT_SOURCE_DIR}/ai/test_provider.cpp" pi::ai)
 picpp_add_private_test(test_sse_parser "${CMAKE_CURRENT_SOURCE_DIR}/ai/test_sse_parser.cpp" pi::ai)
+picpp_add_private_test(test_openai_compatible "${CMAKE_CURRENT_SOURCE_DIR}/ai/test_openai_compatible.cpp" pi::ai)
 picpp_add_private_test(test_thread_guard "${CMAKE_CURRENT_SOURCE_DIR}/util/test_thread_guard.cpp" pi::ai)
 picpp_add_test(test_message_json "${CMAKE_CURRENT_SOURCE_DIR}/agent/test_message_json.cpp" pi::agent)
 picpp_add_test(test_events_json "${CMAKE_CURRENT_SOURCE_DIR}/agent/test_events_json.cpp" pi::agent)
