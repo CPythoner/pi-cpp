@@ -1,37 +1,39 @@
 #include <doctest/doctest.h>
 
+#include <pi/agent/message.hpp>
+
 #include <nlohmann/json.hpp>
 
-#include <cstdint>
 #include <cstddef>
+#include <cstdint>
 #include <fstream>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <variant>
 #include <vector>
 
-#include "agent/message.hpp"
-
-// ---- T7 基础值对象 ----
+namespace ai = pi::ai;
+namespace agent = pi::agent;
 
 TEST_CASE("StopReason 五值双向 round-trip") {
-    const std::pair<pi::StopReason, std::string> cases[] = {
-        {pi::StopReason::Stop, "stop"},
-        {pi::StopReason::Length, "length"},
-        {pi::StopReason::ToolUse, "toolUse"},
-        {pi::StopReason::Error, "error"},
-        {pi::StopReason::Aborted, "aborted"},
+    const std::pair<ai::StopReason, std::string> cases[] = {
+        {ai::StopReason::Stop, "stop"},
+        {ai::StopReason::Length, "length"},
+        {ai::StopReason::ToolUse, "toolUse"},
+        {ai::StopReason::Error, "error"},
+        {ai::StopReason::Aborted, "aborted"},
     };
     for (const auto& [reason, wire] : cases) {
         nlohmann::json j = reason;
         CHECK(j.get<std::string>() == wire);
-        CHECK(j.get<pi::StopReason>() == reason);
+        CHECK(j.get<ai::StopReason>() == reason);
     }
 }
 
 TEST_CASE("Cost round-trip 全字段") {
-    pi::Cost c;
+    ai::Cost c;
     c.input = 0.000014;
     c.output = 0.0000016;
     c.cacheRead = 0;
@@ -43,18 +45,17 @@ TEST_CASE("Cost round-trip 全字段") {
     CHECK(j.at("total") == 0.0000156);
     CHECK(j.contains("cacheRead"));
 
-    auto c2 = j.get<pi::Cost>();
+    auto c2 = j.get<ai::Cost>();
     CHECK(c2.input == c.input);
     CHECK(c2.output == c.output);
     CHECK(c2.cacheRead == c.cacheRead);
     CHECK(c2.cacheWrite == c.cacheWrite);
     CHECK(c2.total == c.total);
-
     CHECK(nlohmann::json(c2) == j);
 }
 
 TEST_CASE("Usage round-trip：cacheWrite1h 缺省与嵌套 cost") {
-    pi::Usage u;
+    ai::Usage u;
     u.input = 120;
     u.output = 8;
     u.cacheRead = 64;
@@ -71,7 +72,7 @@ TEST_CASE("Usage round-trip：cacheWrite1h 缺省与嵌套 cost") {
     CHECK(j.at("cacheWrite1h") == 16);
     CHECK(j.at("cost").at("input") == 0.000014);
 
-    auto u2 = j.get<pi::Usage>();
+    auto u2 = j.get<ai::Usage>();
     CHECK(u2.input == 120);
     CHECK(u2.output == 8);
     CHECK(u2.cacheRead == 64);
@@ -80,24 +81,25 @@ TEST_CASE("Usage round-trip：cacheWrite1h 缺省与嵌套 cost") {
     CHECK(*u2.cacheWrite1h == 16);
     CHECK(u2.cost.input == 0.000014);
     CHECK(u2.cost.total == 0.0000156);
-
     CHECK(nlohmann::json(u2) == j);
 }
 
 TEST_CASE("Usage 缺省字段容忍：cacheWrite1h 省略时序列化为缺省") {
-    pi::Usage u;
+    ai::Usage u;
     u.input = 10;
 
     nlohmann::json j = u;
-    CHECK_FALSE(j.contains("cacheWrite1h"));   // nullopt 不写成 null（对齐 pi/tau wire）
+    CHECK_FALSE(j.contains("cacheWrite1h"));
 
-    auto u2 = nlohmann::json::parse(R"({"input":10,"output":0,"cacheRead":0,"cacheWrite":0,"totalTokens":0,"cost":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"total":0}})").get<pi::Usage>();
+    auto u2 = nlohmann::json::parse(
+        R"({"input":10,"output":0,"cacheRead":0,"cacheWrite":0,"totalTokens":0,"cost":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"total":0}})")
+                  .get<ai::Usage>();
     CHECK(u2.input == 10);
     CHECK_FALSE(u2.cacheWrite1h.has_value());
 }
 
 TEST_CASE("DiagnosticError round-trip：可选 name/stack/code 省略") {
-    pi::DiagnosticError de;
+    ai::DiagnosticError de;
     de.message = "boom";
     de.code = "E_TIMEOUT";
 
@@ -107,21 +109,20 @@ TEST_CASE("DiagnosticError round-trip：可选 name/stack/code 省略") {
     CHECK_FALSE(j.contains("name"));
     CHECK_FALSE(j.contains("stack"));
 
-    auto de2 = j.get<pi::DiagnosticError>();
+    auto de2 = j.get<ai::DiagnosticError>();
     CHECK(de2.message == "boom");
     REQUIRE(de2.code.has_value());
     CHECK(*de2.code == "E_TIMEOUT");
     CHECK_FALSE(de2.name.has_value());
-
     CHECK(nlohmann::json(de2) == j);
 }
 
 TEST_CASE("Diagnostic round-trip：嵌套 error 与自由结构 details") {
-    pi::DiagnosticError de;
+    ai::DiagnosticError de;
     de.name = "TypeError";
     de.message = "cannot read properties of undefined";
 
-    pi::Diagnostic d;
+    ai::Diagnostic d;
     d.type = "usage_limit";
     d.timestamp = 1770000005000;
     d.error = de;
@@ -133,49 +134,46 @@ TEST_CASE("Diagnostic round-trip：嵌套 error 与自由结构 details") {
     CHECK(j.at("details").at("limit") == 100);
     CHECK(j.at("details").at("extra").size() == 3);
 
-    auto d2 = j.get<pi::Diagnostic>();
+    auto d2 = j.get<ai::Diagnostic>();
     CHECK(d2.type == "usage_limit");
     REQUIRE(d2.error.has_value());
     CHECK(d2.error->name == "TypeError");
     CHECK(d2.details == d.details);
-
     CHECK(nlohmann::json(d2) == j);
 }
 
 TEST_CASE("Diagnostic error 缺省容忍") {
-    auto d = nlohmann::json::parse(R"({"type":"info","timestamp":42})").get<pi::Diagnostic>();
+    auto d = nlohmann::json::parse(R"({"type":"info","timestamp":42})").get<ai::Diagnostic>();
     CHECK(d.type == "info");
     CHECK(d.timestamp == 42);
     CHECK_FALSE(d.error.has_value());
 }
 
-// ---- T8 内容块 ----
-
 TEST_CASE("TextContent round-trip 与 textSignature 缺省") {
-    pi::TextContent t;
+    ai::TextContent t;
     t.text = "我先读一下 README。";
 
     nlohmann::json j = t;
     CHECK(j.at("text") == "我先读一下 README。");
     CHECK_FALSE(j.contains("textSignature"));
 
-    auto t2 = nlohmann::json::parse(R"({"text":"hi"})").get<pi::TextContent>();
+    auto t2 = nlohmann::json::parse(R"({"text":"hi"})").get<ai::TextContent>();
     CHECK(t2.text == "hi");
     CHECK_FALSE(t2.textSignature.has_value());
 
-    pi::TextContent s;
+    ai::TextContent s;
     s.text = "signed";
     s.textSignature = "sig_abc";
     nlohmann::json js = s;
     CHECK(js.at("textSignature") == "sig_abc");
-    auto s2 = js.get<pi::TextContent>();
+    auto s2 = js.get<ai::TextContent>();
     REQUIRE(s2.textSignature.has_value());
     CHECK(*s2.textSignature == "sig_abc");
     CHECK(nlohmann::json(s2) == js);
 }
 
 TEST_CASE("ThinkingContent round-trip 与 redacted/thinkingSignature 缺省") {
-    pi::ThinkingContent t;
+    ai::ThinkingContent t;
     t.thinking = "让我想想";
     t.thinkingSignature = "sig_t";
     t.redacted = true;
@@ -185,38 +183,38 @@ TEST_CASE("ThinkingContent round-trip 与 redacted/thinkingSignature 缺省") {
     CHECK(j.at("thinkingSignature") == "sig_t");
     CHECK(j.at("redacted") == true);
 
-    auto t2 = j.get<pi::ThinkingContent>();
+    auto t2 = j.get<ai::ThinkingContent>();
     CHECK(t2.redacted == true);
     REQUIRE(t2.thinkingSignature.has_value());
     CHECK(*t2.thinkingSignature == "sig_t");
     CHECK(nlohmann::json(t2) == j);
 
-    // 缺省：无 signature、无 redacted → nullopt/false
-    auto t3 = nlohmann::json::parse(R"({"thinking":"raw"})").get<pi::ThinkingContent>();
+    auto t3 = nlohmann::json::parse(R"({"thinking":"raw"})").get<ai::ThinkingContent>();
     CHECK(t3.thinking == "raw");
     CHECK_FALSE(t3.thinkingSignature.has_value());
     CHECK(t3.redacted == false);
 }
 
 TEST_CASE("ImageContent round-trip") {
-    pi::ImageContent i;
-    i.data = "aGVsbG8=";   // base64
+    ai::ImageContent i;
+    i.data = "aGVsbG8=";
     i.mimeType = "image/png";
 
     nlohmann::json j = i;
     CHECK(j.at("data") == "aGVsbG8=");
     CHECK(j.at("mimeType") == "image/png");
-    auto i2 = j.get<pi::ImageContent>();
+    auto i2 = j.get<ai::ImageContent>();
     CHECK(i2.data == i.data);
     CHECK(i2.mimeType == i.mimeType);
     CHECK(nlohmann::json(i2) == j);
 }
 
 TEST_CASE("ToolCall arguments 保留任意 JSON（嵌套/数字/布尔/null）") {
-    pi::ToolCall tc;
+    ai::ToolCall tc;
     tc.id = "call_001";
     tc.name = "edit";
-    tc.arguments = nlohmann::json::parse(R"({"path":"a.txt","opts":{"line":3,"force":true,"note":null,"tags":["x","y"]}})");
+    tc.arguments = nlohmann::json::parse(
+        R"({"path":"a.txt","opts":{"line":3,"force":true,"note":null,"tags":["x","y"]}})");
     tc.thoughtSignature = "sig_th";
 
     nlohmann::json j = tc;
@@ -227,87 +225,88 @@ TEST_CASE("ToolCall arguments 保留任意 JSON（嵌套/数字/布尔/null）")
     CHECK(j.at("arguments").at("opts").at("tags").size() == 2);
     CHECK(j.at("thoughtSignature") == "sig_th");
 
-    auto tc2 = j.get<pi::ToolCall>();
-    CHECK(tc2.arguments == tc.arguments);   // 任意 JSON 结构原样保留
+    auto tc2 = j.get<ai::ToolCall>();
+    CHECK(tc2.arguments == tc.arguments);
     REQUIRE(tc2.thoughtSignature.has_value());
     CHECK(*tc2.thoughtSignature == "sig_th");
     CHECK(nlohmann::json(tc2) == j);
 
-    // thoughtSignature 缺省容忍
-    auto tc3 = nlohmann::json::parse(R"({"id":"c2","name":"read","arguments":{"path":"README.md"}})").get<pi::ToolCall>();
+    auto tc3 = nlohmann::json::parse(
+        R"({"id":"c2","name":"read","arguments":{"path":"README.md"}})")
+                   .get<ai::ToolCall>();
     CHECK(tc3.name == "read");
     CHECK_FALSE(tc3.thoughtSignature.has_value());
     CHECK(tc3.arguments.at("path") == "README.md");
 }
 
 TEST_CASE("ContentBlock variant 四块 round-trip（type 判别）") {
-    pi::TextContent text;
+    ai::TextContent text;
     text.text = "hello";
-    pi::ThinkingContent think;
+    ai::ThinkingContent think;
     think.thinking = "hmm";
-    pi::ImageContent img;
+    ai::ImageContent img;
     img.data = "AAAA";
     img.mimeType = "image/jpeg";
-    pi::ToolCall call;
+    ai::ToolCall call;
     call.id = "call_001";
     call.name = "read";
     call.arguments = nlohmann::json::parse(R"({"path":"README.md"})");
 
-    const pi::ContentBlock blocks[] = {text, think, img, call};
+    const ai::ContentBlock blocks[] = {text, think, img, call};
     const std::string types[] = {"text", "thinking", "image", "toolCall"};
 
     for (std::size_t i = 0; i < 4; ++i) {
         nlohmann::json j = blocks[i];
         CHECK(j.at("type") == types[i]);
-        auto b2 = j.get<pi::ContentBlock>();
-        CHECK(nlohmann::json(b2) == j);   // 语义相等（字段序无关）
+        auto b2 = j.get<ai::ContentBlock>();
+        CHECK(nlohmann::json(b2) == j);
     }
 
-    CHECK(std::holds_alternative<pi::TextContent>(nlohmann::json(pi::ContentBlock{text}).get<pi::ContentBlock>()));
-    CHECK(std::holds_alternative<pi::ToolCall>(nlohmann::json(pi::ContentBlock{call}).get<pi::ContentBlock>()));
+    CHECK(std::holds_alternative<ai::TextContent>(
+        nlohmann::json(ai::ContentBlock{text}).get<ai::ContentBlock>()));
+    CHECK(std::holds_alternative<ai::ToolCall>(
+        nlohmann::json(ai::ContentBlock{call}).get<ai::ContentBlock>()));
 }
 
 TEST_CASE("未知 content type 抛错且带 type 值") {
     nlohmann::json j = nlohmann::json::parse(R"({"type":"alien","text":"?"})");
-    pi::ContentBlock b;
+    ai::ContentBlock b;
     CHECK_THROWS_WITH(j.get_to(b), "unknown content block type: alien");
 }
 
-// ---- T9 AgentMessage 七角色 ----
-
 namespace {
 
-pi::AssistantMessage makeAssistant() {
-    pi::TextContent text;
+ai::AssistantMessage makeAssistant() {
+    ai::TextContent text;
     text.text = "我先读一下 README。";
-    pi::ToolCall call;
+    ai::ToolCall call;
     call.id = "call_001";
     call.name = "read";
     call.arguments = nlohmann::json::parse(R"({"path":"README.md"})");
 
-    pi::DiagnosticError de;
+    ai::DiagnosticError de;
     de.name = "ValueError";
     de.message = "bad input";
 
-    pi::Diagnostic diag;
+    ai::Diagnostic diag;
     diag.type = "retry";
     diag.timestamp = 1770000005001;
     diag.error = de;
 
-    pi::AssistantMessage m;
+    ai::AssistantMessage m;
     m.content = {text, call};
     m.api = "openai-completions";
     m.provider = "deepseek";
     m.model = "deepseek-chat";
     m.responseModel = "deepseek-chat-v3";
     m.responseId = "resp_123";
-    m.diagnostics = std::vector<pi::Diagnostic>{diag};
+    m.diagnostics = std::vector<ai::Diagnostic>{diag};
     m.usage.input = 120;
     m.usage.output = 8;
     m.usage.totalTokens = 128;
     m.usage.cost.input = 0.000014;
     m.usage.cost.total = 0.0000156;
-    m.stopReason = pi::StopReason::ToolUse;
+    m.stopReason = ai::StopReason::ToolUse;
     m.errorMessage = std::nullopt;
     m.timestamp = 1770000005000;
     return m;
@@ -316,25 +315,25 @@ pi::AssistantMessage makeAssistant() {
 } // namespace
 
 TEST_CASE("UserMessage：字符串 content 与块数组 content 两种形态") {
-    pi::UserMessage m;
+    ai::UserMessage m;
     m.content = std::string{"帮我看看这个项目"};
     m.timestamp = 1770000001000;
 
     nlohmann::json j = m;
     CHECK(j.at("content").is_string());
     CHECK(j.at("timestamp") == 1770000001000);
-    auto m2 = j.get<pi::UserMessage>();
+    auto m2 = j.get<ai::UserMessage>();
     CHECK(std::holds_alternative<std::string>(m2.content));
     CHECK(std::get<std::string>(m2.content) == "帮我看看这个项目");
     CHECK(nlohmann::json(m2) == j);
 
-    pi::ImageContent img;
+    ai::ImageContent img;
     img.data = "AAAA";
     img.mimeType = "image/png";
-    pi::TextContent look;
+    ai::TextContent look;
     look.text = "看图";
-    pi::UserMessage mb;
-    mb.content = std::vector<pi::ContentBlock>{look, img};
+    ai::UserMessage mb;
+    mb.content = std::vector<ai::ContentBlock>{look, img};
     mb.timestamp = 1770000002000;
 
     nlohmann::json jb = mb;
@@ -342,12 +341,12 @@ TEST_CASE("UserMessage：字符串 content 与块数组 content 两种形态") {
     CHECK(jb.at("content").size() == 2);
     CHECK(jb.at("content").at(0).at("type") == "text");
     CHECK(jb.at("content").at(1).at("type") == "image");
-    auto mb2 = jb.get<pi::UserMessage>();
+    auto mb2 = jb.get<ai::UserMessage>();
     CHECK(nlohmann::json(mb2) == jb);
 }
 
 TEST_CASE("AssistantMessage 全字段 round-trip") {
-    const pi::AssistantMessage m = makeAssistant();
+    const ai::AssistantMessage m = makeAssistant();
 
     nlohmann::json j = m;
     CHECK(j.at("api") == "openai-completions");
@@ -355,44 +354,44 @@ TEST_CASE("AssistantMessage 全字段 round-trip") {
     CHECK(j.at("diagnostics").at(0).at("error").at("name") == "ValueError");
     CHECK(j.at("usage").at("cost").at("total") == 0.0000156);
     CHECK(j.at("stopReason") == "toolUse");
-    CHECK_FALSE(j.contains("errorMessage"));   // nullopt 不落盘
+    CHECK_FALSE(j.contains("errorMessage"));
 
-    auto m2 = j.get<pi::AssistantMessage>();
+    auto m2 = j.get<ai::AssistantMessage>();
     CHECK(m2.provider == "deepseek");
     REQUIRE(m2.responseId.has_value());
     CHECK(*m2.responseId == "resp_123");
     REQUIRE(m2.diagnostics.has_value());
     CHECK(m2.diagnostics->size() == 1);
     CHECK(m2.usage.input == 120);
-    CHECK(m2.stopReason == pi::StopReason::ToolUse);
+    CHECK(m2.stopReason == ai::StopReason::ToolUse);
     CHECK_FALSE(m2.errorMessage.has_value());
     CHECK(m2.content.size() == 2);
     CHECK(nlohmann::json(m2) == j);
 }
 
 TEST_CASE("AssistantMessage error 形态：stopReason:error + errorMessage") {
-    pi::AssistantMessage m;
+    ai::AssistantMessage m;
     m.api = "anthropic";
     m.provider = "p";
     m.model = "m";
-    m.stopReason = pi::StopReason::Error;
+    m.stopReason = ai::StopReason::Error;
     m.errorMessage = "connection reset";
 
     nlohmann::json j = m;
     CHECK(j.at("stopReason") == "error");
     CHECK(j.at("errorMessage") == "connection reset");
-    auto m2 = j.get<pi::AssistantMessage>();
-    CHECK(m2.stopReason == pi::StopReason::Error);
+    auto m2 = j.get<ai::AssistantMessage>();
+    CHECK(m2.stopReason == ai::StopReason::Error);
     REQUIRE(m2.errorMessage.has_value());
     CHECK(*m2.errorMessage == "connection reset");
     CHECK(nlohmann::json(m2) == j);
 }
 
 TEST_CASE("ToolResultMessage round-trip 与缺省容忍") {
-    pi::TextContent text;
+    ai::TextContent text;
     text.text = "# demo\n...";
 
-    pi::ToolResultMessage m;
+    ai::ToolResultMessage m;
     m.toolCallId = "call_001";
     m.toolName = "read";
     m.content = {text};
@@ -404,11 +403,11 @@ TEST_CASE("ToolResultMessage round-trip 与缺省容忍") {
     CHECK(j.at("toolCallId") == "call_001");
     CHECK(j.at("details").at("totalLines") == 42);
     CHECK(j.at("content").at(0).at("type") == "text");
-    auto m2 = j.get<pi::ToolResultMessage>();
+    auto m2 = j.get<ai::ToolResultMessage>();
     CHECK(nlohmann::json(m2) == j);
 
-    // 缺省容忍：仅必填字段
-    auto m3 = nlohmann::json::parse(R"({"toolCallId":"c","toolName":"t"})").get<pi::ToolResultMessage>();
+    auto m3 = nlohmann::json::parse(R"({"toolCallId":"c","toolName":"t"})")
+                  .get<ai::ToolResultMessage>();
     CHECK(m3.toolCallId == "c");
     CHECK(m3.content.empty());
     CHECK(m3.details.is_null());
@@ -417,7 +416,7 @@ TEST_CASE("ToolResultMessage round-trip 与缺省容忍") {
 }
 
 TEST_CASE("BashExecutionMessage round-trip 与 fullOutputPath 可选") {
-    pi::BashExecutionMessage m;
+    agent::BashExecutionMessage m;
     m.command = "ls -la";
     m.output = "total 0";
     m.exitCode = 0;
@@ -432,23 +431,23 @@ TEST_CASE("BashExecutionMessage round-trip 与 fullOutputPath 可选") {
     CHECK(j.at("exitCode") == 0);
     CHECK(j.at("truncated") == true);
     CHECK(j.at("fullOutputPath") == "/tmp/out.txt");
-    auto m2 = j.get<pi::BashExecutionMessage>();
+    auto m2 = j.get<agent::BashExecutionMessage>();
     REQUIRE(m2.fullOutputPath.has_value());
     CHECK(*m2.fullOutputPath == "/tmp/out.txt");
     CHECK(nlohmann::json(m2) == j);
 
-    pi::BashExecutionMessage bare;
+    agent::BashExecutionMessage bare;
     bare.command = "pwd";
     bare.output = "/tmp/demo";
     nlohmann::json jb = bare;
     CHECK_FALSE(jb.contains("fullOutputPath"));
-    auto bare2 = jb.get<pi::BashExecutionMessage>();
+    auto bare2 = jb.get<agent::BashExecutionMessage>();
     CHECK_FALSE(bare2.fullOutputPath.has_value());
     CHECK(nlohmann::json(bare2) == jb);
 }
 
 TEST_CASE("CustomMessage：customType + 字符串 content + details + display") {
-    pi::CustomMessage m;
+    agent::CustomMessage m;
     m.customType = "todo.refresh";
     m.content = std::string{"刷新 TODO"};
     m.details = nlohmann::json::parse(R"({"count":3})");
@@ -459,94 +458,98 @@ TEST_CASE("CustomMessage：customType + 字符串 content + details + display") 
     CHECK(j.at("customType") == "todo.refresh");
     CHECK(j.at("content") == "刷新 TODO");
     CHECK(j.at("display") == false);
-    auto m2 = j.get<pi::CustomMessage>();
+    auto m2 = j.get<agent::CustomMessage>();
     CHECK(m2.display == false);
     CHECK(m2.details.at("count") == 3);
     CHECK(nlohmann::json(m2) == j);
 }
 
 TEST_CASE("BranchSummary 与 CompactionSummary round-trip") {
-    pi::BranchSummaryMessage b;
+    agent::BranchSummaryMessage b;
     b.summary = "分支摘要";
     b.timestamp = 1770000006000;
     nlohmann::json jb = b;
     CHECK(jb.at("summary") == "分支摘要");
-    auto b2 = jb.get<pi::BranchSummaryMessage>();
+    auto b2 = jb.get<agent::BranchSummaryMessage>();
     CHECK(nlohmann::json(b2) == jb);
 
-    pi::CompactionSummaryMessage c;
+    agent::CompactionSummaryMessage c;
     c.summary = "压缩摘要";
     c.timestamp = 1770000007000;
     nlohmann::json jc = c;
-    auto c2 = jc.get<pi::CompactionSummaryMessage>();
+    auto c2 = jc.get<agent::CompactionSummaryMessage>();
     CHECK(nlohmann::json(c2) == jc);
 }
 
 TEST_CASE("AgentMessage 七角色构造→dump→parse→语义相等") {
-    pi::UserMessage user;
+    ai::UserMessage user;
     user.content = std::string{"q"};
-    pi::AssistantMessage assistant = makeAssistant();
+    ai::AssistantMessage assistant = makeAssistant();
 
-    pi::ToolResultMessage tr;
+    ai::ToolResultMessage tr;
     tr.toolCallId = "call_001";
     tr.toolName = "read";
 
-    pi::BashExecutionMessage bash;
+    agent::BashExecutionMessage bash;
     bash.command = "make";
     bash.output = "ok";
 
-    pi::CustomMessage custom;
+    agent::CustomMessage custom;
     custom.customType = "hook";
 
-    pi::BranchSummaryMessage branch;
+    agent::BranchSummaryMessage branch;
     branch.summary = "s1";
 
-    pi::CompactionSummaryMessage compaction;
+    agent::CompactionSummaryMessage compaction;
     compaction.summary = "s2";
 
-    const pi::AgentMessage msgs[] = {user, assistant, tr, bash, custom, branch, compaction};
+    const agent::AgentMessage msgs[] = {user, assistant, tr, bash, custom, branch, compaction};
     const std::string roles[] = {"user", "assistant", "toolResult", "bashExecution",
                                  "custom", "branchSummary", "compactionSummary"};
 
     for (std::size_t i = 0; i < 7; ++i) {
         nlohmann::json j = msgs[i];
         CHECK(j.at("role") == roles[i]);
-        auto m2 = j.get<pi::AgentMessage>();
-        CHECK(nlohmann::json(m2) == j);   // 语义相等（nlohmann 对象比较）
+        auto m2 = j.get<agent::AgentMessage>();
+        CHECK(nlohmann::json(m2) == j);
     }
 
-    CHECK(std::holds_alternative<pi::UserMessage>(nlohmann::json(pi::AgentMessage{user}).get<pi::AgentMessage>()));
-    CHECK(std::holds_alternative<pi::CompactionSummaryMessage>(
-        nlohmann::json(pi::AgentMessage{compaction}).get<pi::AgentMessage>()));
+    CHECK(std::holds_alternative<ai::UserMessage>(
+        nlohmann::json(agent::AgentMessage{user}).get<agent::AgentMessage>()));
+    CHECK(std::holds_alternative<agent::CompactionSummaryMessage>(
+        nlohmann::json(agent::AgentMessage{compaction}).get<agent::AgentMessage>()));
 }
 
 TEST_CASE("未知 role 抛错且带 role 值") {
     nlohmann::json j = nlohmann::json::parse(R"({"role":"alien","content":"x"})");
-    pi::AgentMessage m;
-    CHECK_THROWS_WITH(j.get_to(m), "unknown role: alien");
+    agent::AgentMessage m;
+    try {
+        j.get_to(m);
+        FAIL("expected unknown role to throw");
+    } catch (const std::runtime_error& e) {
+        CHECK(std::string(e.what()).find("alien") != std::string::npos);
+    }
 }
 
 TEST_CASE("AgentMessage 缺省字段容忍（WITH_DEFAULT 语义）") {
-    // 仅 role + content 的极简 assistant
     auto m = nlohmann::json::parse(
-        R"({"role":"assistant","content":[{"type":"text","text":"hi"}]})").get<pi::AgentMessage>();
-    auto* a = std::get_if<pi::AssistantMessage>(&m);
+        R"({"role":"assistant","content":[{"type":"text","text":"hi"}]})")
+                 .get<agent::AgentMessage>();
+    auto* a = std::get_if<ai::AssistantMessage>(&m);
     REQUIRE(a != nullptr);
     CHECK(a->api.empty());
     CHECK(a->model.empty());
     CHECK(a->usage.totalTokens == 0);
-    CHECK(a->stopReason == pi::StopReason::Stop);
+    CHECK(a->stopReason == ai::StopReason::Stop);
     CHECK(a->content.size() == 1);
 
-    // user 缺 timestamp
-    auto u = nlohmann::json::parse(R"({"role":"user","content":"hi"})").get<pi::AgentMessage>();
-    auto* um = std::get_if<pi::UserMessage>(&u);
+    auto u = nlohmann::json::parse(R"({"role":"user","content":"hi"})")
+                 .get<agent::AgentMessage>();
+    auto* um = std::get_if<ai::UserMessage>(&u);
     REQUIRE(um != nullptr);
     CHECK(um->timestamp == 0);
     CHECK(std::get<std::string>(um->content) == "hi");
 }
-
-// ---- T10 黄金样本 JSONL ----
 
 namespace {
 
@@ -570,12 +573,11 @@ void checkSessionFixtureRoundTrip(const std::string& name, std::size_t expectedL
     REQUIRE(lines.size() == expectedLines);
 
     for (const auto& line : lines) {
-        const nlohmann::json entry = nlohmann::json::parse(line);   // 每行必须是合法 JSON
+        const nlohmann::json entry = nlohmann::json::parse(line);
         REQUIRE(entry.is_object());
         REQUIRE(entry.contains("type"));
 
         if (entry.at("type") == "session") {
-            // header 行：JSON 级 round-trip
             CHECK(nlohmann::json::parse(entry.dump()) == entry);
             continue;
         }
@@ -583,11 +585,11 @@ void checkSessionFixtureRoundTrip(const std::string& name, std::size_t expectedL
         REQUIRE(entry.at("type") == "message");
         REQUIRE(entry.contains("message"));
         const nlohmann::json& jmsg = entry.at("message");
-        REQUIRE(jmsg.contains("role"));   // role 可解析为 AgentMessage
+        REQUIRE(jmsg.contains("role"));
 
-        const pi::AgentMessage m = jmsg.get<pi::AgentMessage>();
-        const nlohmann::json jrt = m;     // dump 回 JSON
-        CHECK(jrt == jmsg);               // 语义相等（nlohmann 对象比较，非字节比较）
+        const agent::AgentMessage m = jmsg.get<agent::AgentMessage>();
+        const nlohmann::json jrt = m;
+        CHECK(jrt == jmsg);
     }
 }
 
