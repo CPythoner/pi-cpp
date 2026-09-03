@@ -270,3 +270,274 @@ TEST_CASE("未知 content type 抛错且带 type 值") {
     pi::ContentBlock b;
     CHECK_THROWS_WITH(j.get_to(b), "unknown content block type: alien");
 }
+
+// ---- T9 AgentMessage 七角色 ----
+
+namespace {
+
+pi::AssistantMessage makeAssistant() {
+    pi::TextContent text;
+    text.text = "我先读一下 README。";
+    pi::ToolCall call;
+    call.id = "call_001";
+    call.name = "read";
+    call.arguments = nlohmann::json::parse(R"({"path":"README.md"})");
+
+    pi::DiagnosticError de;
+    de.name = "ValueError";
+    de.message = "bad input";
+
+    pi::Diagnostic diag;
+    diag.type = "retry";
+    diag.timestamp = 1770000005001;
+    diag.error = de;
+
+    pi::AssistantMessage m;
+    m.content = {text, call};
+    m.api = "openai-completions";
+    m.provider = "deepseek";
+    m.model = "deepseek-chat";
+    m.responseModel = "deepseek-chat-v3";
+    m.responseId = "resp_123";
+    m.diagnostics = std::vector<pi::Diagnostic>{diag};
+    m.usage.input = 120;
+    m.usage.output = 8;
+    m.usage.totalTokens = 128;
+    m.usage.cost.input = 0.000014;
+    m.usage.cost.total = 0.0000156;
+    m.stopReason = pi::StopReason::ToolUse;
+    m.errorMessage = std::nullopt;
+    m.timestamp = 1770000005000;
+    return m;
+}
+
+} // namespace
+
+TEST_CASE("UserMessage：字符串 content 与块数组 content 两种形态") {
+    pi::UserMessage m;
+    m.content = std::string{"帮我看看这个项目"};
+    m.timestamp = 1770000001000;
+
+    nlohmann::json j = m;
+    CHECK(j.at("content").is_string());
+    CHECK(j.at("timestamp") == 1770000001000);
+    auto m2 = j.get<pi::UserMessage>();
+    CHECK(std::holds_alternative<std::string>(m2.content));
+    CHECK(std::get<std::string>(m2.content) == "帮我看看这个项目");
+    CHECK(nlohmann::json(m2) == j);
+
+    pi::ImageContent img;
+    img.data = "AAAA";
+    img.mimeType = "image/png";
+    pi::UserMessage mb;
+    mb.content = std::vector<pi::ContentBlock>{pi::TextContent{std::string{"看图"}}, img};
+    mb.timestamp = 1770000002000;
+
+    nlohmann::json jb = mb;
+    CHECK(jb.at("content").is_array());
+    CHECK(jb.at("content").size() == 2);
+    CHECK(jb.at("content").at(0).at("type") == "text");
+    CHECK(jb.at("content").at(1).at("type") == "image");
+    auto mb2 = jb.get<pi::UserMessage>();
+    CHECK(nlohmann::json(mb2) == jb);
+}
+
+TEST_CASE("AssistantMessage 全字段 round-trip") {
+    const pi::AssistantMessage m = makeAssistant();
+
+    nlohmann::json j = m;
+    CHECK(j.at("api") == "openai-completions");
+    CHECK(j.at("responseModel") == "deepseek-chat-v3");
+    CHECK(j.at("diagnostics").at(0).at("error").at("name") == "ValueError");
+    CHECK(j.at("usage").at("cost").at("total") == 0.0000156);
+    CHECK(j.at("stopReason") == "toolUse");
+    CHECK_FALSE(j.contains("errorMessage"));   // nullopt 不落盘
+
+    auto m2 = j.get<pi::AssistantMessage>();
+    CHECK(m2.provider == "deepseek");
+    REQUIRE(m2.responseId.has_value());
+    CHECK(*m2.responseId == "resp_123");
+    REQUIRE(m2.diagnostics.has_value());
+    CHECK(m2.diagnostics->size() == 1);
+    CHECK(m2.usage.input == 120);
+    CHECK(m2.stopReason == pi::StopReason::ToolUse);
+    CHECK_FALSE(m2.errorMessage.has_value());
+    CHECK(m2.content.size() == 2);
+    CHECK(nlohmann::json(m2) == j);
+}
+
+TEST_CASE("AssistantMessage error 形态：stopReason:error + errorMessage") {
+    pi::AssistantMessage m;
+    m.api = "anthropic";
+    m.provider = "p";
+    m.model = "m";
+    m.stopReason = pi::StopReason::Error;
+    m.errorMessage = "connection reset";
+
+    nlohmann::json j = m;
+    CHECK(j.at("stopReason") == "error");
+    CHECK(j.at("errorMessage") == "connection reset");
+    auto m2 = j.get<pi::AssistantMessage>();
+    CHECK(m2.stopReason == pi::StopReason::Error);
+    REQUIRE(m2.errorMessage.has_value());
+    CHECK(*m2.errorMessage == "connection reset");
+    CHECK(nlohmann::json(m2) == j);
+}
+
+TEST_CASE("ToolResultMessage round-trip 与缺省容忍") {
+    pi::TextContent text;
+    text.text = "# demo\n...";
+
+    pi::ToolResultMessage m;
+    m.toolCallId = "call_001";
+    m.toolName = "read";
+    m.content = {text};
+    m.details = nlohmann::json::parse(R"({"totalLines":42})");
+    m.isError = false;
+    m.timestamp = 1770000010500;
+
+    nlohmann::json j = m;
+    CHECK(j.at("toolCallId") == "call_001");
+    CHECK(j.at("details").at("totalLines") == 42);
+    CHECK(j.at("content").at(0).at("type") == "text");
+    auto m2 = j.get<pi::ToolResultMessage>();
+    CHECK(nlohmann::json(m2) == j);
+
+    // 缺省容忍：仅必填字段
+    auto m3 = nlohmann::json::parse(R"({"toolCallId":"c","toolName":"t"})").get<pi::ToolResultMessage>();
+    CHECK(m3.toolCallId == "c");
+    CHECK(m3.content.empty());
+    CHECK(m3.details.is_null());
+    CHECK(m3.isError == false);
+    CHECK(m3.timestamp == 0);
+}
+
+TEST_CASE("BashExecutionMessage round-trip 与 fullOutputPath 可选") {
+    pi::BashExecutionMessage m;
+    m.command = "ls -la";
+    m.output = "total 0";
+    m.exitCode = 0;
+    m.cancelled = false;
+    m.truncated = true;
+    m.fullOutputPath = "/tmp/out.txt";
+    m.excludeFromContext = false;
+    m.timestamp = 1770000003000;
+
+    nlohmann::json j = m;
+    CHECK(j.at("command") == "ls -la");
+    CHECK(j.at("exitCode") == 0);
+    CHECK(j.at("truncated") == true);
+    CHECK(j.at("fullOutputPath") == "/tmp/out.txt");
+    auto m2 = j.get<pi::BashExecutionMessage>();
+    REQUIRE(m2.fullOutputPath.has_value());
+    CHECK(*m2.fullOutputPath == "/tmp/out.txt");
+    CHECK(nlohmann::json(m2) == j);
+
+    pi::BashExecutionMessage bare;
+    bare.command = "pwd";
+    bare.output = "/tmp/demo";
+    nlohmann::json jb = bare;
+    CHECK_FALSE(jb.contains("fullOutputPath"));
+    auto bare2 = jb.get<pi::BashExecutionMessage>();
+    CHECK_FALSE(bare2.fullOutputPath.has_value());
+    CHECK(nlohmann::json(bare2) == jb);
+}
+
+TEST_CASE("CustomMessage：customType + 字符串 content + details + display") {
+    pi::CustomMessage m;
+    m.customType = "todo.refresh";
+    m.content = std::string{"刷新 TODO"};
+    m.details = nlohmann::json::parse(R"({"count":3})");
+    m.display = false;
+    m.timestamp = 1770000004000;
+
+    nlohmann::json j = m;
+    CHECK(j.at("customType") == "todo.refresh");
+    CHECK(j.at("content") == "刷新 TODO");
+    CHECK(j.at("display") == false);
+    auto m2 = j.get<pi::CustomMessage>();
+    CHECK(m2.display == false);
+    CHECK(m2.details.at("count") == 3);
+    CHECK(nlohmann::json(m2) == j);
+}
+
+TEST_CASE("BranchSummary 与 CompactionSummary round-trip") {
+    pi::BranchSummaryMessage b;
+    b.summary = "分支摘要";
+    b.timestamp = 1770000006000;
+    nlohmann::json jb = b;
+    CHECK(jb.at("summary") == "分支摘要");
+    auto b2 = jb.get<pi::BranchSummaryMessage>();
+    CHECK(nlohmann::json(b2) == jb);
+
+    pi::CompactionSummaryMessage c;
+    c.summary = "压缩摘要";
+    c.timestamp = 1770000007000;
+    nlohmann::json jc = c;
+    auto c2 = jc.get<pi::CompactionSummaryMessage>();
+    CHECK(nlohmann::json(c2) == jc);
+}
+
+TEST_CASE("AgentMessage 七角色构造→dump→parse→语义相等") {
+    pi::UserMessage user;
+    user.content = std::string{"q"};
+    pi::AssistantMessage assistant = makeAssistant();
+
+    pi::ToolResultMessage tr;
+    tr.toolCallId = "call_001";
+    tr.toolName = "read";
+
+    pi::BashExecutionMessage bash;
+    bash.command = "make";
+    bash.output = "ok";
+
+    pi::CustomMessage custom;
+    custom.customType = "hook";
+
+    pi::BranchSummaryMessage branch;
+    branch.summary = "s1";
+
+    pi::CompactionSummaryMessage compaction;
+    compaction.summary = "s2";
+
+    const pi::AgentMessage msgs[] = {user, assistant, tr, bash, custom, branch, compaction};
+    const std::string roles[] = {"user", "assistant", "toolResult", "bashExecution",
+                                 "custom", "branchSummary", "compactionSummary"};
+
+    for (std::size_t i = 0; i < 7; ++i) {
+        nlohmann::json j = msgs[i];
+        CHECK(j.at("role") == roles[i]);
+        auto m2 = j.get<pi::AgentMessage>();
+        CHECK(nlohmann::json(m2) == j);   // 语义相等（nlohmann 对象比较）
+    }
+
+    CHECK(std::holds_alternative<pi::UserMessage>(nlohmann::json(pi::AgentMessage{user}).get<pi::AgentMessage>()));
+    CHECK(std::holds_alternative<pi::CompactionSummaryMessage>(
+        nlohmann::json(pi::AgentMessage{compaction}).get<pi::AgentMessage>()));
+}
+
+TEST_CASE("未知 role 抛错且带 role 值") {
+    nlohmann::json j = nlohmann::json::parse(R"({"role":"alien","content":"x"})");
+    pi::AgentMessage m;
+    CHECK_THROWS_WITH(j.get_to(m), "unknown role: alien");
+}
+
+TEST_CASE("AgentMessage 缺省字段容忍（WITH_DEFAULT 语义）") {
+    // 仅 role + content 的极简 assistant
+    auto m = nlohmann::json::parse(
+        R"({"role":"assistant","content":[{"type":"text","text":"hi"}]})").get<pi::AgentMessage>();
+    auto* a = std::get_if<pi::AssistantMessage>(&m);
+    REQUIRE(a != nullptr);
+    CHECK(a->api.empty());
+    CHECK(a->model.empty());
+    CHECK(a->usage.totalTokens == 0);
+    CHECK(a->stopReason == pi::StopReason::Stop);
+    CHECK(a->content.size() == 1);
+
+    // user 缺 timestamp
+    auto u = nlohmann::json::parse(R"({"role":"user","content":"hi"})").get<pi::AgentMessage>();
+    auto* um = std::get_if<pi::UserMessage>(&u);
+    REQUIRE(um != nullptr);
+    CHECK(um->timestamp == 0);
+    CHECK(std::get<std::string>(um->content) == "hi");
+}
