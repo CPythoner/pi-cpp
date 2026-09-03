@@ -23,6 +23,7 @@ configure_file(cmake/version.h.in "${CMAKE_CURRENT_BINARY_DIR}/generated/version
 add_library(pi_types STATIC
     src/util/string.cpp
     src/agent/message.cpp
+    src/agent/events.cpp
 )
 target_include_directories(pi_types PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/src"
