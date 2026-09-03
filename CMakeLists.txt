@@ -22,6 +22,7 @@ configure_file(cmake/version.h.in "${CMAKE_CURRENT_BINARY_DIR}/generated/version
 # 类型/基础设施库（util+agent 源文件；T4 起填充）
 add_library(pi_types STATIC
     src/util/string.cpp
+    src/agent/message.cpp
 )
 target_include_directories(pi_types PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/src"
@@ -29,7 +30,7 @@ target_include_directories(pi_types PUBLIC
 )
 # 注：FetchContent 引入的 nlohmann/json 构建树目标名为 nlohmann_json
 # （命名空间形式 nlohmann::nlohmann_json 仅存在于 find_package CONFIG 模式）
-target_link_libraries(pi_types INTERFACE nlohmann_json)
+target_link_libraries(pi_types PUBLIC nlohmann_json)
 
 add_executable(picpp src/cli/main.cpp)
 target_link_libraries(picpp PRIVATE pi_types fmt::fmt)

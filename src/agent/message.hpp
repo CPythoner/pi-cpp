@@ -90,4 +90,67 @@ inline void from_json(const nlohmann::json& j, Diagnostic& d) {
     d.details = j.contains("details") ? j.at("details") : nlohmann::json{};
 }
 
+// ---- 内容块（wire 判别字段 "type"）----
+struct TextContent {
+    std::string text;
+    std::optional<std::string> textSignature;
+};
+inline void to_json(nlohmann::json& j, const TextContent& t) {
+    j["text"] = t.text;
+    if (t.textSignature) j["textSignature"] = *t.textSignature;
+}
+inline void from_json(const nlohmann::json& j, TextContent& t) {
+    t.text = j.value("text", std::string{});
+    if (j.contains("textSignature")) t.textSignature = j.at("textSignature").get<std::string>();
+    else t.textSignature = std::nullopt;
+}
+
+struct ThinkingContent {
+    std::string thinking;
+    std::optional<std::string> thinkingSignature;
+    bool redacted = false;
+};
+inline void to_json(nlohmann::json& j, const ThinkingContent& t) {
+    j["thinking"] = t.thinking;
+    if (t.thinkingSignature) j["thinkingSignature"] = *t.thinkingSignature;
+    j["redacted"] = t.redacted;
+}
+inline void from_json(const nlohmann::json& j, ThinkingContent& t) {
+    t.thinking = j.value("thinking", std::string{});
+    if (j.contains("thinkingSignature")) t.thinkingSignature = j.at("thinkingSignature").get<std::string>();
+    else t.thinkingSignature = std::nullopt;
+    t.redacted = j.value("redacted", false);
+}
+
+struct ImageContent {
+    std::string data;               // base64
+    std::string mimeType;
+};
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(ImageContent, data, mimeType)
+
+struct ToolCall {
+    std::string id, name;
+    nlohmann::json arguments;       // 已解析对象（流式期间由 parseStreamingJson 增量填充）
+    std::optional<std::string> thoughtSignature;   // Google 思路签名
+};
+inline void to_json(nlohmann::json& j, const ToolCall& t) {
+    j["id"] = t.id;
+    j["name"] = t.name;
+    j["arguments"] = t.arguments;
+    if (t.thoughtSignature) j["thoughtSignature"] = *t.thoughtSignature;
+}
+inline void from_json(const nlohmann::json& j, ToolCall& t) {
+    t.id = j.value("id", std::string{});
+    t.name = j.value("name", std::string{});
+    t.arguments = j.contains("arguments") ? j.at("arguments") : nlohmann::json{};
+    if (j.contains("thoughtSignature")) t.thoughtSignature = j.at("thoughtSignature").get<std::string>();
+    else t.thoughtSignature = std::nullopt;
+}
+
+using ContentBlock = std::variant<TextContent, ThinkingContent, ImageContent, ToolCall>;
+
+// JSON（message.cpp 实现；variant 按 type 判别分发，未知 type 抛 std::runtime_error）
+void to_json(nlohmann::json& j, const ContentBlock& b);
+void from_json(const nlohmann::json& j, ContentBlock& b);
+
 } // namespace pi

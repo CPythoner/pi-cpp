@@ -261,8 +261,8 @@ TEST_CASE("ContentBlock variant 四块 round-trip（type 判别）") {
         CHECK(nlohmann::json(b2) == j);   // 语义相等（字段序无关）
     }
 
-    CHECK(std::holds_alternative<pi::TextContent>(nlohmann::json(text).get<pi::ContentBlock>()));
-    CHECK(std::holds_alternative<pi::ToolCall>(nlohmann::json(call).get<pi::ContentBlock>()));
+    CHECK(std::holds_alternative<pi::TextContent>(nlohmann::json(pi::ContentBlock{text}).get<pi::ContentBlock>()));
+    CHECK(std::holds_alternative<pi::ToolCall>(nlohmann::json(pi::ContentBlock{call}).get<pi::ContentBlock>()));
 }
 
 TEST_CASE("未知 content type 抛错且带 type 值") {
