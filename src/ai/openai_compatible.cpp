@@ -1,5 +1,7 @@
 #include "ai/openai_compatible.hpp"
 
+#include "ai/streaming_json.hpp"
+
 #include <algorithm>
 #include <exception>
 #include <string>
@@ -19,6 +21,15 @@ std::optional<std::string> stringValue(const nlohmann::json& object, const char*
     const auto it = object.find(key);
     if (it == object.end() || !it->is_string()) return std::nullopt;
     return it->get<std::string>();
+}
+
+bool isEncryptedReasoningDetail(const nlohmann::json& detail) {
+    if (!detail.is_object()) return false;
+    const auto type = stringValue(detail, "type");
+    const auto id = stringValue(detail, "id");
+    const auto data = stringValue(detail, "data");
+    return type && *type == "reasoning.encrypted" &&
+           id && !id->empty() && data && !data->empty();
 }
 
 } // namespace
@@ -152,6 +163,11 @@ void OpenAiChatCompletionsDecoder::processDelta(const nlohmann::json& delta) {
         toolCalls != delta.end() && toolCalls->is_array()) {
         processToolCalls(*toolCalls);
     }
+
+    if (const auto reasoningDetails = delta.find("reasoning_details");
+        reasoningDetails != delta.end() && reasoningDetails->is_array()) {
+        processReasoningDetails(*reasoningDetails);
+    }
 }
 
 void OpenAiChatCompletionsDecoder::processToolCalls(const nlohmann::json& toolCalls) {
@@ -179,7 +195,31 @@ void OpenAiChatCompletionsDecoder::processToolCalls(const nlohmann::json& toolCa
             toolById_[*id] = state.contentIndex;
         }
 
+        if (!block.id.empty()) {
+            if (const auto pending = pendingReasoningDetailsByToolCallId_.find(block.id);
+                pending != pendingReasoningDetailsByToolCallId_.end()) {
+                block.thoughtSignature = pending->second;
+                pendingReasoningDetailsByToolCallId_.erase(pending);
+            }
+        }
+
         stream_.push(EvToolCallDelta{state.contentIndex, argumentDelta, output_});
+    }
+}
+
+void OpenAiChatCompletionsDecoder::processReasoningDetails(
+    const nlohmann::json& reasoningDetails) {
+    for (const auto& detail : reasoningDetails) {
+        if (!isEncryptedReasoningDetail(detail)) continue;
+
+        const auto id = detail.at("id").get<std::string>();
+        const auto serialized = detail.dump();
+        if (const auto tool = toolById_.find(id); tool != toolById_.end()) {
+            auto& block = std::get<ToolCall>(output_.content[tool->second]);
+            block.thoughtSignature = serialized;
+        } else {
+            pendingReasoningDetailsByToolCallId_[id] = serialized;
+        }
     }
 }
 
@@ -362,11 +402,7 @@ void OpenAiChatCompletionsDecoder::terminateError(std::string message, StopReaso
 }
 
 nlohmann::json OpenAiChatCompletionsDecoder::parseStreamingArguments(std::string_view partial) {
-    if (partial.empty()) return nlohmann::json::object();
-
-    auto parsed = nlohmann::json::parse(partial.begin(), partial.end(), nullptr, false);
-    if (parsed.is_discarded()) return nlohmann::json::object();
-    return parsed;
+    return parseStreamingJson(partial);
 }
 
 } // namespace pi::ai::detail
