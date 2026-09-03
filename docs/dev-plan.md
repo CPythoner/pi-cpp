@@ -1,12 +1,12 @@
 # pi-cpp 开发计划（版本化路线图）
 
-> **For agentic workers:** 本文档是主路线图。每个版本启动时，先用 writing-plans 流程把该版本拆解为任务级实施计划（TDD、bite-sized tasks），再进入实现。各版本内的功能清单用 checkbox 跟踪。
+> **For agentic workers:** 本文档是主路线图。每个版本启动时，先把该版本拆解为任务级实施计划（TDD、bite-sized tasks），再进入实现。各版本内的功能清单用 checkbox 跟踪。
 
-**目标：** 用 C++17 实现 pi agent（github.com/earendil-works/pi，TS monorepo）的核心功能——一个可交互的终端 coding agent CLI。行为语义基线固定为 pi `v0.80.0`；Tau `v0.4.1` 仅作为实现参考。项目目标不是一次性复制 pi `v0.80.0` 的全部 Provider/认证/扩展能力，而是对计划内实现的核心 Agent / Coding Agent 能力做到可验证的行为兼容。
+**目标：** 用 C++17 实现 pi agent（github.com/earendil-works/pi，TS monorepo）的核心功能，并把 `pi-ai`、`pi-agent-core`、`pi-coding-agent` 三层都建设成可独立供外部 C++ 项目调用的 SDK；`picpp` CLI/TUI 只是这些 SDK 的一个官方前端。行为语义基线固定为 pi `v0.80.0`；Tau `v0.4.1` 仅作为实现参考。
 
-**架构：** 三层移植，以 pi `v0.80.0` 定义行为语义，以 HuggingFace Tau `v0.4.1`（pi 架构的 Python 参考实现）辅助理解模块划分和实现方式：`agent`（≈tau_agent，消息/事件/主循环）→ `ai`（≈tau_ai，Provider/SSE）→ `coding`（≈tau_coding，工具/会话/配置）+ `cli`/`tui` 前端。单 executable artifact、错误即消息、append-only JSONL 树状会话。
+项目目标不是一次性复制 pi `v0.80.0` 的全部 Provider、认证和扩展实现，而是对路线图承诺的核心 Agent / Coding Agent 能力做到可验证的行为兼容，并在 `v0.3.0` 前完成核心功能面，在 `v1.0.0` 冻结稳定对外契约。
 
-**技术栈：** C++17 · CMake ≥3.25 + FetchContent · cpr(SSE) · nlohmann/json · reproc++ · fmt · doctest · FTXUI(后期) · cxxopts
+**技术栈：** C++17 · CMake ≥3.25 · cpr/curl · nlohmann/json · reproc++ · fmt · doctest · FTXUI（后期）· cxxopts
 
 ---
 
@@ -14,542 +14,743 @@
 
 | 决策项 | 选择 |
 |---|---|
-| 行为语义基线 | **pi `v0.80.0`**；计划内已实现能力的 API、CLI、事件、会话、工具调用及 wire 语义，以该 tag 的可观察行为为准 |
-| 兼容目标 | **核心能力子集兼容**，不是 pi `v0.80.0` 全功能克隆；每项能力用 Compatibility Matrix 标注 Compatible / Partial / Planned / Out of Scope |
-| Tau 参考版本 | **Tau `v0.4.1`**；仅参考模块拆分、算法和工程实现，不作为行为规范来源 |
-| 语言标准 | **C++17**（编译器基线 GCC 9+ / Clang 7+ / VS2019+；取消链用自研 CancellationToken，接口形态尽量贴近 stop token，但不宣称与 `std::stop_token` 完全等价；格式化统一用 fmt） |
-| UI 形态 | v0.1.0 print 模式 → v0.2.0–v0.4.0 行式 REPL + ANSI 流式输出 → v0.5.0 起迭代 FTXUI TUI |
-| Provider 策略 | v0.0.2 先打通 OpenAI Chat Completions 兼容协议；v0.4.0 加 Anthropic Messages 原生协议；其余协议按需后续扩展 |
-| 平台 | Linux / macOS / Windows 三平台第一天支持（CI matrix） |
-| 依赖策略 | 轻依赖：cpr、nlohmann/json、reproc、fmt、cxxopts、doctest、FTXUI，全部 FetchContent + pin tag/commit |
-| 分发形态 | 三平台各一个 `picpp` executable artifact；优先降低运行时依赖，不把“完全静态链接”作为跨平台硬约束 |
-| 二进制名 | `picpp`；配置目录 `~/.picpp/`；C++ 命名空间 `pi` |
+| 行为语义基线 | **pi `v0.80.0`**；计划内能力的 API、CLI、事件、会话、工具调用及 wire 语义以该 tag 的可观察行为为准 |
+| Tau 参考版本 | **Tau `v0.4.1`**；只参考模块拆分、算法和工程实现，不作为行为规范来源 |
+| 兼容目标 | **核心能力子集兼容**，不是 pi `v0.80.0` 全功能克隆；Compatibility Matrix 标记 Compatible / Partial / Planned / Out of Scope |
+| SDK 形态 | `pi-ai` → `pi-agent-core` → `pi-coding-agent` 三层都是独立 CMake library / SDK；CLI/TUI 只能依赖 SDK，不反向渗透业务逻辑 |
+| 公共头文件 | 所有对外 API 放 `include/pi/...`；`src/` 只放实现与 private headers，不再把 `src/` 作为 PUBLIC include path |
+| CMake target | `pi_ai` (`pi::ai`) → `pi_agent_core` (`pi::agent_core`) → `pi_coding_agent` (`pi::coding_agent`)；`picpp` PRIVATE link `pi::coding_agent` |
+| 语言标准 | **C++17**；GCC 9+ / Clang 7+ / VS2019+；不依赖 coroutine/modules |
+| UI 形态 | `v0.1.0` print MVP → `v0.1.1` REPL → `v0.2.0` TUI；CLI/TUI 始终只是 SDK consumer |
+| Provider 策略 | `v0.0.2` OpenAI Chat Completions compatible；`v0.1.3` Anthropic Messages；其他协议按需后续扩展 |
+| 平台 | Linux / macOS / Windows 从第一天支持 |
+| 分发形态 | 三平台 `picpp` executable artifact + 可安装/可消费的 CMake SDK targets；不把“完全静态链接”作为跨平台硬约束 |
+| 二进制名 | `picpp`；配置目录 `~/.picpp/`；C++ 顶层命名空间 `pi` |
 
 ### 1.1 兼容基线与冲突裁决
 
-pi `v0.80.0` 与 Tau `v0.4.1` 并非同期基线。本项目采用“**pi 定义行为，Tau 参考实现**”的双参考策略：
+pi `v0.80.0` 与 Tau `v0.4.1` 并非同期基线。本项目采用“**pi 定义行为，Tau 参考实现**”策略：
 
-1. 对**本路线图明确实现的能力**，API、CLI、事件、会话、工具调用和 wire 格式以 pi `v0.80.0` 为规范来源。
-2. C++ 类型设计、模块组织、并发模型、存储算法等可以参考 Tau `v0.4.1` 的实现方式。
-3. 两者出现差异时，按 **pi `v0.80.0` 可观察行为 > 本项目兼容规范 > Tau `v0.4.1` 实现** 的顺序裁决。
-4. Tau `v0.4.1` 中来自更高版本 pi 或其自行扩展的能力，只能进入扩展清单或后续版本，不能作为当前兼容基线的必需能力。
-5. 兼容测试必须以 pi `v0.80.0` 的真实样本或差分行为为主；Tau 样本仅用于辅助互操作验证。
-6. pi `v0.80.0` 中存在、但本路线图明确标记为 Planned / Out of Scope 的能力，不计为当前版本兼容缺陷。
+1. 对路线图明确实现的能力，API、事件、session、tool、CLI/RPC wire 等可观察语义以 pi `v0.80.0` 为规范来源。
+2. C++ 类型设计、模块组织、并发模型和存储算法可以参考 Tau `v0.4.1`。
+3. 两者有差异时，按 **pi `v0.80.0` 可观察行为 > 本项目明确兼容规范 > Tau `v0.4.1` 实现** 裁决。
+4. Tau 中来自更高版本 pi 或 Tau 自身扩展的能力，不自动进入当前基线。
+5. 兼容测试优先使用 pi `v0.80.0` 真实样本与 differential tests；Tau fixture 只能作为辅助回归。
+6. pi 中存在但本路线图标成 Planned / Out of Scope 的能力，不计为当前版本兼容缺陷。
 
-特别说明：`packages/orchestrator` 在 pi `v0.80.0` 中尚不存在，后来才作为实验包加入，并在 pi `v0.81.0` 改名为 `packages/server`。即使 Tau `v0.4.1` 含有类似能力，也不属于当前基线的缺失项，应作为后续扩展单独规划。
+特别说明：`packages/orchestrator` 在 pi `v0.80.0` 中尚不存在，后来才加入并在 pi `v0.81.0` 改名为 `packages/server`，因此不属于当前兼容基线。
 
 ### 1.2 Compatibility Matrix（持续维护）
 
-状态含义：
+状态：
 
-- **Compatible**：已实现，并有 pi `v0.80.0` 真实样本或差分测试证明计划内语义兼容。
-- **Partial**：已实现主要路径，但存在文档化偏差或未覆盖子能力。
-- **Planned**：属于项目目标，但尚未到对应版本。
-- **Out of Scope**：v1.0.0 前明确不做，不构成兼容缺陷。
+- **Compatible**：已实现，并有 pi `v0.80.0` fixture 或 differential test 证明计划内语义兼容。
+- **Partial**：主要路径已实现，但存在明确记录的偏差或未覆盖子能力。
+- **Planned**：属于目标，但尚未到对应版本。
+- **Out of Scope**：v1.0.0 前明确不做。
 
-| 能力面 | v1.0.0 目标状态 | 说明 |
+| 能力面 | v1.0.0 目标状态 | 计划里程碑 |
 |---|---|---|
-| AgentMessage / AgentEvent wire | Compatible | 以 pi `v0.80.0` 真实 fixture + differential trace 为兼容门 |
-| Agent runLoop | Compatible | steering / follow-up / tool batch / abort / error semantics 对齐 |
-| 默认 coding tools：read/write/edit/bash | Compatible | 参数、结果、截断与关键错误语义对齐 |
-| grep/find/ls | Compatible | 后置版本补齐 |
-| Session JSONL / tree / compaction | Compatible | 先稳定完整 entry 模型，再分版本开放行为 |
-| print / interactive / RPC | Compatible 或文档化 Partial | 仅对计划内命令与事件集承诺兼容 |
-| Extensions | Partial | C++ 使用进程外协议替代 TS 动态加载；不追求实现机制相同 |
-| Provider: OpenAI Chat Completions compatible | Compatible | 首个主协议 |
-| Provider: Anthropic Messages | Compatible | v0.4.0 |
-| 其他 pi 内置 Provider 协议 | Out of Scope | openai-responses / bedrock / vertex / mistral 等按需后续加入 |
-| OAuth / credential store | Out of Scope | v1.0.0 前只支持 API key / 配置 |
-| MCP | Out of Scope | pi `v0.80.0` 核心并非内置 MCP；后续可经扩展实现 |
+| `pi-ai` public SDK | Compatible / Stable API | v0.0.2 建边界，v0.3.0 API freeze candidate |
+| `pi-agent-core` public SDK | Compatible / Stable API | v0.0.3 完成主干，v0.3.0 freeze candidate |
+| `pi-coding-agent` public SDK | Compatible / Stable API | v0.1.x–v0.2.x 完成主干，v0.3.0 freeze candidate |
+| AgentMessage / AgentEvent wire | Compatible | v0.0.2+ differential gate |
+| Agent runLoop | Compatible | v0.0.3 |
+| read/write/edit/bash | Compatible | v0.0.4 |
+| grep/find/ls | Compatible | v0.2.1 |
+| Session JSONL/tree/compaction | Compatible | v0.1.0–v0.1.2 |
+| OpenAI Chat Completions compatible | Compatible | v0.0.2 |
+| Anthropic Messages | Compatible | v0.1.3 |
+| print / REPL / TUI | Compatible 或文档化 Partial | v0.1.0 / v0.1.1 / v0.2.0 |
+| RPC | Compatible 或文档化 Partial | v0.2.1 |
+| Extensions | Partial | v0.2.2；C++ 进程外协议替代 TS 动态加载 |
+| Skills / Prompt templates | Compatible 或 Partial | v0.2.3 |
+| 其他 pi 内置 Provider 协议 | Out of Scope | openai-responses / bedrock / vertex / mistral 等 |
+| OAuth / credential store | Out of Scope | v1.0 前只做 API key / 配置 |
+| MCP | Out of Scope | 后续可通过 extension 适配 |
 
-该表不是静态声明：每个版本 closeout 必须同步更新状态和已知偏差。
+每个版本 closeout 都必须更新该矩阵与 known deviations。
+
+### 1.3 版本号策略
+
+`v1.0.0` 前采用“**成熟度阶段 + 阶段内里程碑**”的版本策略，避免每个技术主题都提升 minor 版本：
+
+- `v0.0.x`：架构地基，SDK 边界、Provider、Agent Loop、基础工具。
+- `v0.1.x`：**能用**。完成 print MVP、REPL、session tree/compaction、多 Provider。
+- `v0.2.x`：**好用**。完成 TUI、RPC、只读工具、extensions、skills/resilience。
+- `v0.3.0`：**核心完成**。pi `v0.80.0` 的计划内核心 Coding Agent 功能基本完成，开始兼容性/稳定性冻结。
+- `v0.3.x`：不再扩主功能面，只做 compatibility fix、bugfix、性能、跨平台、SDK/API 打磨与 release candidate。
+- `v1.0.0`：冻结计划内行为兼容契约和对外 SDK/API；不是“100% 复制 pi 全部功能”的含义。
+
+在 `0.x` 阶段允许 patch 位承载同一成熟度阶段内的功能里程碑；进入 `v1.0.0` 后按稳定 SemVer 纪律管理 public API 与兼容性。
 
 ---
 
-## 2. 参考蓝本要点（两仓库分析结论）
+## 2. 参考蓝本与核心移植原则
 
-**pi `v0.80.0`**（TS）：核心包包括 ai/agent/coding-agent/tui。核心是 `packages/agent/src/agent-loop.ts` 的 runLoop 双层循环（外层 follow-up 队列、内层工具迭代）+ AgentEvent 事件流 + JSONL 树状会话（id/parentId）。核心无内置 MCP；审批靠 `beforeToolCall` 钩子，集成主要靠扩展系统。默认 coding tools 是 read/write/edit/bash，同时代码库已有 grep/find/ls 等工具。
+**pi `v0.80.0`**：核心包包括 ai / agent / coding-agent / tui。Agent 核心是 runLoop 双层循环、AgentEvent 事件流和 JSONL 树状 session。默认 coding tools 是 read/write/edit/bash，同时已有 grep/find/ls 等能力。
 
-**Tau `v0.4.1`**（Python 参考实现）：模块组织与 pi 高度对应，手写 SSE 与较紧凑的实现便于参考 C++ 设计。其施工日志可用于参考增量实施顺序；但它与 pi `v0.80.0` 并非同期基线，任何 wire 或行为兼容结论都必须回到 pi `v0.80.0` 验证。
+**Tau `v0.4.1`**：Python 参考实现更紧凑，适合辅助理解 SSE、主循环和模块组织，但任何 wire/行为兼容结论必须回到 pi `v0.80.0` 验证。
 
-**关键移植原则（行为由 pi `v0.80.0` 确认，Tau `v0.4.1` 辅助实现）：**
+关键原则：
 
-1. 错误不让主循环因普通 Provider/Tool 错误崩溃，按 pi 可观察语义编码为 `stopReason: "error"` 等消息/结果。
-2. 消息双层模型：会话里存 AgentMessage，仅在调 LLM 边界 `convertToLlm` 降维。
-3. 会话是 append-only JSONL **树**（id/parentId），fork/branch/压缩都是追加 entry 而非改写历史。
-4. 工具默认可并行执行；需要顺序语义的工具/操作必须显式声明或经 mutation queue 串行化。
-5. steering / follow-up 是**两条可积压消息队列**，不是单槽；支持 one-at-a-time / all 的 drain 语义，排空点按 pi runLoop 行为实现。
-6. 兼容性优先用**同输入双实现差分**证明，而不是只靠源码阅读推断。
+1. 普通 Provider/Tool 错误不能让 Agent 主进程崩溃，应转成可观察的 error message/result。
+2. 消息分层：LLM/provider 类型属于 `pi-ai`；AgentMessage/AgentEvent 属于 `pi-agent-core`；session/coding-domain 类型属于 `pi-coding-agent`。
+3. session 是 append-only JSONL 树；fork/branch/compaction 追加 entry，不重写历史。
+4. 工具默认可并行；需要顺序语义的工具或文件 mutation 显式串行。
+5. steering / follow-up 是两条可积压队列，支持 one-at-a-time / all drain，不能实现成单槽。
+6. 兼容性优先用“同输入双实现差分”证明，而不是只靠源码阅读。
+7. **三层核心库必须先是 SDK，再是 CLI 的内部实现。** 任何 CLI/TUI 专属依赖不得进入下层 public API。
 
 ---
 
-## 3. 总体架构
+## 3. SDK 架构与源码组织
 
-### 3.1 分层与目录
+### 3.1 目标依赖方向
+
+```text
+external app / picpp CLI / picpp TUI
+                 │
+                 ▼
+        pi-coding-agent SDK
+                 │
+                 ▼
+         pi-agent-core SDK
+                 │
+                 ▼
+             pi-ai SDK
+```
+
+依赖只能向下，不允许：
+
+- `pi-ai` include `pi-agent-core` / `pi-coding-agent`。
+- `pi-agent-core` include `pi-coding-agent`。
+- SDK public header include CLI/TUI header。
+- SDK public API 暴露 `src/...` private type。
+
+### 3.2 目标目录结构
 
 ```text
 pi-cpp/
 ├── CMakeLists.txt
-├── cmake/deps.cmake
+├── cmake/
+│   ├── deps.cmake
+│   ├── picppConfig.cmake.in
+│   └── install.cmake
+├── include/
+│   └── pi/
+│       ├── ai/                         # pi-ai PUBLIC API
+│       │   ├── message.hpp
+│       │   ├── model.hpp
+│       │   ├── provider.hpp
+│       │   ├── events.hpp
+│       │   ├── event_stream.hpp
+│       │   └── cancellation.hpp
+│       ├── agent/                      # pi-agent-core PUBLIC API
+│       │   ├── message.hpp
+│       │   ├── events.hpp
+│       │   ├── tool.hpp
+│       │   ├── agent.hpp
+│       │   └── queue_mode.hpp
+│       └── coding/                     # pi-coding-agent PUBLIC API
+│           ├── coding_agent.hpp
+│           ├── config.hpp
+│           ├── model_catalog.hpp
+│           ├── session.hpp
+│           ├── session_entry.hpp
+│           ├── tools.hpp
+│           └── extension.hpp           # 到 v0.2.2 再开放
 ├── src/
-│   ├── agent/
-│   │   ├── message.hpp/.cpp
-│   │   ├── events.hpp/.cpp
-│   │   ├── agent_loop.cpp
-│   │   ├── agent.hpp/.cpp
-│   │   ├── tool.hpp
-│   │   ├── tool_history.cpp
-│   │   └── event_stream.hpp
-│   ├── ai/
-│   │   ├── provider.hpp
+│   ├── ai/                             # pi-ai implementation/private details
 │   │   ├── openai_compatible.cpp
 │   │   ├── anthropic.cpp
 │   │   ├── stream_canon.cpp
 │   │   ├── retry.cpp
 │   │   ├── http.cpp
-│   │   └── fake.cpp
-│   ├── coding/
-│   │   ├── tools/
-│   │   ├── session/
-│   │   │   ├── entry.hpp/.cpp       # v0.1.0 起稳定完整 SessionHeader/SessionEntry wire 模型
-│   │   │   ├── storage.cpp
-│   │   │   ├── tree.cpp
-│   │   │   └── manager.cpp
-│   │   ├── compaction.cpp
-│   │   ├── system_prompt.cpp
-│   │   ├── config.cpp
-│   │   └── catalog.cpp
-│   ├── cli/
-│   │   ├── main.cpp
-│   │   ├── print_mode.cpp
-│   │   ├── repl.cpp
-│   │   └── rpc_mode.cpp
-│   ├── tui/
-│   └── util/
+│   │   └── detail/
+│   ├── agent/                          # pi-agent-core implementation
+│   │   ├── agent.cpp
+│   │   ├── agent_loop.cpp
+│   │   ├── tool_history.cpp
+│   │   └── detail/
+│   └── coding/                         # pi-coding-agent implementation
+│       ├── tools/
+│       ├── session/
+│       ├── compaction.cpp
+│       ├── system_prompt.cpp
+│       ├── config.cpp
+│       ├── catalog.cpp
+│       └── detail/
+├── apps/
+│   └── picpp/                          # 官方 CLI/TUI，只消费 pi::coding_agent
+│       ├── main.cpp
+│       ├── print_mode.cpp
+│       ├── repl.cpp
+│       ├── rpc_mode.cpp
+│       └── tui/
 ├── tests/
-│   ├── fixtures/pi-v0.80.0/          # 来自真实 pi 基线的输入/输出/会话样本
-│   └── differential/                 # pi reference harness 与 picpp 的规范化 trace 对比
+│   ├── ai/
+│   ├── agent/
+│   ├── coding/
+│   ├── consumer/                       # 外部消费者编译测试
+│   ├── fixtures/pi-v0.80.0/
+│   └── differential/
 ├── examples/
-├── docs/
-└── .github/workflows/ci.yml
+│   ├── ai_chat/
+│   ├── agent_core/
+│   └── coding_agent/
+└── docs/
 ```
 
-### 3.2 并发模型（对应 pi 的单线程事件循环语义）
+### 3.3 CMake target 与 SDK 消费契约
 
-- **主线程**：REPL/TUI 事件循环，从 `EventStream` 队列取事件渲染。
-- **网络线程**：每个活跃 LLM 流一个 worker `std::thread`，cpr 同步请求 + callback 将事件推入队列。
-- **工具执行**：默认并行；工具可声明 sequential；edit/write 至少经 file-mutation-queue 保证相互冲突的写操作串行。
-- **取消**：CancellationToken 贯穿 Agent → Provider → HTTP / Tool → reproc；取消回调不得在持有 token 内部 mutex 时执行用户代码。
-- **消息队列**：steeringQueue / followUpQueue 各自持有 `deque<AgentMessage>`；默认 `one-at-a-time`，同时支持 `all` 模式；不得用 `optional<AgentMessage>` 单槽替代。
+目标 target：
 
-### 3.3 CancellationToken 约束
+```cmake
+pi_ai           -> alias pi::ai
+pi_agent_core   -> alias pi::agent_core
+pi_coding_agent -> alias pi::coding_agent
+picpp           -> executable
+```
 
-v0.0.1 已交付自研 CancellationToken；在进入真实 HTTP 前做一次语义加固：
+依赖关系：
 
-1. `request()` 锁内只做 cancelled 状态转换与 callback snapshot/detach。
-2. 用户 callback 在解锁后执行，避免 callback 重入 token 或做网络/进程取消时死锁。
-3. unregister 与 callback 生命周期需有明确同步规则和竞态测试。
-4. 文档只声明“接口目标接近 stop-token 取消模型”，除非逐项验证，否则不再写“与 `std::stop_token` 完全等价”。
+```cmake
+pi_agent_core   PUBLIC pi::ai
+pi_coding_agent PUBLIC pi::agent_core
+picpp           PRIVATE pi::coding_agent
+```
 
-### 3.4 技术选型
+公共 include 目录必须使用：
+
+```cmake
+target_include_directories(<sdk> PUBLIC
+    $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+)
+```
+
+**禁止把 `${PROJECT_SOURCE_DIR}/src` 放进 PUBLIC include path。** `src/` 可以作为 target PRIVATE include 路径。
+
+SDK 至少支持两种消费方式：
+
+1. 仓库内/源码方式：`add_subdirectory(pi-cpp)` 后 `target_link_libraries(app PRIVATE pi::coding_agent)`。
+2. 安装包方式：`cmake --install` 后 `find_package(picpp CONFIG REQUIRED)`，再链接 `pi::ai` / `pi::agent_core` / `pi::coding_agent`。
+
+### 3.4 Public API 纪律
+
+- Public header 只放到 `include/pi/...`。
+- `detail/`、HTTP parser、retry state、session storage implementation 等默认 private。
+- public header 不得 include `src/...`。
+- public header 只能依赖标准库、对外声明的第三方类型，或同层/下层 public header；尽量避免把 cpr/reproc/FTXUI 类型暴露到 SDK API。
+- Provider、Agent、CodingAgent 的异步/取消/事件接口优先用项目自己的稳定抽象，避免第三方库成为 ABI/API 契约。
+- `0.x` 不承诺 ABI 稳定，但每个 public API 破坏性调整必须在 CHANGELOG 标明；`v0.3.0` 起进入 API freeze candidate。
+- `v1.0.0` 后 public API 变化按 SemVer 管理。
+
+### 3.5 当前源码组织的迁移结论
+
+`v0.0.1` 的 `pi_types` + `src/` PUBLIC include 是骨架阶段临时结构，不作为长期架构。**在 v0.0.2 开始 Provider 开发前必须先迁移 SDK 边界**：
+
+1. 创建 `include/pi/ai`、`include/pi/agent`、`include/pi/coding`。
+2. 把已属于 public contract 的 v0.0.1 types 从 `src/` 迁入对应 `include/pi/...`。
+3. 拆除 `pi_types`，形成 `pi_ai` / `pi_agent_core`，并预建 `pi_coding_agent` target。
+4. `src/` 从 PUBLIC include path 移除。
+5. 增加三个最小 consumer build tests，证明各 SDK 能独立被外部 target include/link。
+6. 后续新增 API 必须先判断 public/private，再决定进入 `include/` 还是 `src/`。
+
+---
+
+## 4. 并发与基础设施约束
+
+### 4.1 并发模型
+
+- **调用方线程/前端线程**：CLI/TUI 或外部 SDK consumer 驱动 Agent/CodingAgent，并订阅事件。
+- **网络 worker**：每个活跃 LLM stream 使用受控 worker；HTTP callback 推送标准化事件。
+- **工具执行**：默认并行；工具可声明 sequential；edit/write 冲突写操作至少由 file-mutation queue 串行化。
+- **取消**：CancellationToken 从 public SDK API 贯穿 Agent → Provider → Tool → process。
+- **消息队列**：steering/followUp 各持有 `deque<AgentMessage>`，默认 one-at-a-time，同时支持 all。
+
+### 4.2 CancellationToken 约束
+
+v0.0.1 已交付自研 CancellationToken；进入真实 HTTP 前必须加固：
+
+1. `request()` 锁内只做状态转换和 callback snapshot/detach。
+2. 用户 callback 解锁后执行，避免重入死锁。
+3. unregister / request / destructor 生命周期有明确同步规则与竞态测试。
+4. 只声明“接口目标接近 stop-token 取消模型”，未经逐项验证不宣称与 `std::stop_token` 完全等价。
+
+### 4.3 技术选型原则
 
 | 领域 | 选型 | 关键注意点 |
 |---|---|---|
-| HTTP+SSE | cpr/curl | 必须以所 pin 版本的真实 API 做 spike；流式请求避免整体 wall-clock timeout，保留 connect/low-speed/取消控制 |
-| JSON | nlohmann/json | wire 类型需显式保证字段省略/null/未知字段策略与 pi fixture 一致 |
-| 子进程 | reproc++ | Unix 进程组与 Windows Job Object 均需真实进程树测试 |
-| TUI | FTXUI ≥7.x | v0.5.0 前 CJK/IME/跨线程 Post spike；失败则退回增强 REPL，TUI 技术栈重评 |
-| 格式化 | fmt | C++17 无 std::format |
-| 测试 | doctest | 单元与确定性集成测试 |
-| CLI | cxxopts | 参数解析；wire/模式行为由业务层控制 |
-| 构建 | CMake ≥3.25 | FetchContent Declare 前置、精确 pin、第三方 SYSTEM；发布目标是单 executable artifact，不强制所有平台完全静态 |
-| CI | GitHub Actions matrix | ubuntu / macOS / Windows；PR CI 不依赖真实外部 API secrets |
+| HTTP+SSE | cpr/curl | cpr 只存在于 `pi-ai` implementation；不要泄漏到 public API；流式请求避免整体 wall-clock timeout |
+| JSON | nlohmann/json | wire 类型字段省略/null/未知字段策略必须有 fixture 验证 |
+| 子进程 | reproc++ | 只存在于 coding implementation；Unix process group + Windows Job Object |
+| TUI | FTXUI | 只属于 `apps/picpp`；绝不能成为 `pi-coding-agent` SDK 依赖 |
+| 格式化 | fmt | 可用于实现，但 public API 尽量不暴露 fmt 类型 |
+| 测试 | doctest | SDK 单元测试 + consumer build tests + differential tests |
+| CLI | cxxopts | 只属于 `apps/picpp` |
+| 构建 | CMake ≥3.25 | 精确 pin 第三方；SDK targets 可 build/install/export |
+| CI | GitHub Actions | Linux/macOS/Windows；PR 不依赖真实外部 API secret |
 
 ---
 
-## 4. 里程碑总览
+## 5. 里程碑总览
 
-| 版本 | 主题 | 交付标志 | 规模 |
+| 版本 | 成熟度 | 主题 | 交付标志 |
 |---|---|---|---|
-| v0.0.1 | 骨架与核心类型 | 三平台 CI；基础 wire 类型与单测 | S |
-| v0.0.2 | Provider 层与 SSE | OpenAI 兼容真实流 + differential test 基座 | M |
-| v0.0.3 | Agent 主循环 | 多轮 tool loop + 多消息 steering/follow-up + abort | M |
-| v0.0.4 | 工具四件套 | read/write/edit/bash 全部可用 | M |
-| v0.1.0 | **print 模式 MVP** | `picpp -p` 端到端 + 完整 SessionEntry wire 模型落盘 | M |
-| v0.2.0 | REPL + 会话恢复 | 三平台交互 + resume + session tree 基础 | M |
-| v0.3.0 | 会话树与压缩 | fork/branch/tree + compaction | M |
-| v0.4.0 | 多 Provider | Anthropic + pi-derived 模型元数据 + runtime switch | M |
-| v0.5.0 | TUI | FTXUI 全屏交互；CJK/IME 通过 go/no-go 门 | L |
-| v0.6.0 | RPC + 只读工具 | pi 计划内 JSONL RPC + grep/find/ls | M |
-| v0.7.0 | 扩展协议 v1 | 进程外 extension tool/command/hook + 示例 | L |
-| v0.8.0 | Skills / Prompts / Resilience | 用户扩展内容 + crash-safe session + 大会话加载 | M |
-| v0.9.0 | Release Hardening | 性能、E2E matrix、打包、兼容矩阵收敛 | M |
-| v1.0.0 | Compatibility Freeze | 不加新功能；冻结计划内兼容契约并正式发布 | S |
-
-每个版本都是可发布状态：构建绿、测试绿、上一个版本功能不回退。
+| v0.0.1 | 地基 | 骨架与核心类型 | 三平台 CI；基础 message/event types（已完成） |
+| v0.0.2 | 地基 | **SDK 边界 + Provider/SSE** | `pi::ai` / `pi::agent_core` 基础 target；OpenAI-compatible 真实流；differential 基座 |
+| v0.0.3 | 地基 | Agent 主循环 | `pi::agent_core` 可独立使用；多轮 tool loop + steering/followUp + abort |
+| v0.0.4 | 地基 | Coding 工具四件套 | `pi::coding_agent` 基础可用；read/write/edit/bash |
+| v0.1.0 | **能用** | print MVP + Session schema | `picpp -p` 端到端；完整 SessionEntry；三层 SDK 可安装/消费 |
+| v0.1.1 | 能用 | REPL + resume | 三平台交互、会话恢复 |
+| v0.1.2 | 能用 | Session tree + compaction | fork/branch/tree + 长会话压缩 |
+| v0.1.3 | 能用 | Anthropic + model catalog | 第二 Provider 协议 + runtime model switch |
+| v0.2.0 | **好用** | TUI | FTXUI 全屏交互；SDK 不依赖 UI |
+| v0.2.1 | 好用 | RPC + grep/find/ls | headless 集成 + 完整只读工具 |
+| v0.2.2 | 好用 | Extensions v1 | 进程外 tool/command/hook extension |
+| v0.2.3 | 好用 | Skills / Prompts / Resilience | skills、prompt templates、crash-safe session、大会话加载 |
+| v0.3.0 | **核心完成** | Compatibility / API Freeze Candidate | pi 计划内核心 Coding Agent 能力基本完成；不再扩主功能面 |
+| v0.3.x | 稳定化 | Hardening / RC | compatibility fix、SDK/API 打磨、性能、E2E、打包 |
+| v1.0.0 | 稳定 | Stable Contract | 冻结计划内行为兼容与 public SDK/API；正式发布 |
 
 ---
 
-## 5. 各版本详细计划
+## 6. 各版本详细计划
 
 ### v0.0.1 — 骨架与核心类型（已完成）
 
-**目标：** 项目能三平台编译、CI 就位；建立消息/事件类型系统和 C++17 基础设施。
+**目标：** 三平台编译与 CI；建立 message/event 类型和 C++17 基础设施。
 
-本版本已按 `docs/design/v0.0.1.md` 完成并发布；历史实现细节与偏差以该设计文档的实现回顾和 CHANGELOG 为准。本路线图不追溯修改已完成版本的验收事实。
+历史实现以 `docs/design/v0.0.1.md` 和 CHANGELOG 为准，不反向修改已完成版本事实。
 
 **已确认遗留：**
 
-- 当前 fixtures 含手工构造样本，不能单独作为“pi `v0.80.0` 真实兼容”的证明。
-- CancellationToken 在进入真实 HTTP 前需完成 callback 锁外执行的语义加固。
-- EventStream 在 v0.0.2 实现。
+- fixtures 中有手工样本，不能单独证明 pi `v0.80.0` 真实兼容。
+- CancellationToken 进入真实 HTTP 前需加固 callback 锁外执行。
+- 当前 `pi_types` + `src/` PUBLIC include 是临时结构，必须在 v0.0.2 迁移到三层 SDK 边界。
 
 ---
 
-### v0.0.2 — Provider 层与 SSE
+### v0.0.2 — SDK 边界 + Provider 层与 SSE
 
-**目标：** 打通 OpenAI Chat Completions 兼容协议的真实流式对话，并建立后续所有版本共用的 pi `v0.80.0` 差分测试基座。
+**目标：** 在继续增加功能前先建立正确的公开 API 边界；完成 `pi-ai` 第一条真实 Provider 流并建立 differential 基座。
 
-**前置兼容任务（T0）：**
+**T0：SDK 边界重构**
 
-- [ ] 从 pi `v0.80.0` 固定 tag 生成/收集真实 message/event/session fixtures，存入 `tests/fixtures/pi-v0.80.0/`，记录来源脚本与基线 commit。
-- [ ] 增加最小 TS reference harness：给定 FakeProvider/固定输入，输出规范化 `trace.jsonl`。
-- [ ] C++ 侧对相同输入输出规范化 trace；比较事件顺序、消息字段、stopReason、toolCall 聚合等稳定字段；UUID/时间戳/耗时等非确定字段只做规范化后比较。
-- [ ] 把“真实 pi fixture + differential trace”写入兼容门；Tau fixture 只做辅助回归。
+- [ ] 建立 `include/pi/ai`、`include/pi/agent`、`include/pi/coding`。
+- [ ] 将 v0.0.1 已公开类型迁移到正确 public header；实现留在 `src/`。
+- [ ] 拆 `pi_types`：建立 `pi_ai` (`pi::ai`) 与 `pi_agent_core` (`pi::agent_core`)；建立空/最小 `pi_coding_agent` target 为后续预留。
+- [ ] 移除 `src/` 的 PUBLIC include；private headers 只通过 PRIVATE include 使用。
+- [ ] 加 `tests/consumer/ai`、`agent`、`coding` 最小编译/链接测试。
+- [ ] 明确 namespace 与 include 形式：`#include <pi/ai/...>`、`<pi/agent/...>`、`<pi/coding/...>`。
 
-**功能清单：**
+**T1：兼容测试基座**
 
-- [ ] 加固 `CancellationToken`：callback snapshot 后锁外执行；补 callback 重入、unregister/request 并发、CombinedCancellation 析构竞态测试。
-- [ ] `ai/provider.hpp`：`streamResponse(model, system, messages, tools, stopToken, sessionId)` 单接口，产出 L1 事件流。
-- [ ] `agent/event_stream.hpp`：线程安全事件队列（push/close/wait/result semantics），网络线程生产、消费侧拉取。
-- [ ] `ai/http.cpp`：按实际 pin 的 cpr API 做流式封装；Bearer 鉴权；connect/low-speed/取消语义明确。
-- [ ] `ai/openai_compatible.cpp`：请求构造、SSE 事件解析、delta 合并、tool_calls index 聚合、finish_reason → StopReason、usage 捕获。
-- [ ] `ai/stream_canon.cpp`：文本/thinking/tool-call 通道 Start/Delta/End 配对归一化。
-- [ ] `ai/retry.cpp`：指数退避 + jitter + Retry-After/可重试错误判定；普通网络/Provider 错误转 AssistantMessage error，而非让 agent 进程退出。
-- [ ] `ai/fake.cpp`：FakeProvider 事件脚本回放。
-- [ ] `examples/chat_demo.cpp`：最小真实端点流式示例。
+- [ ] 从 pi `v0.80.0` 固定 tag 生成/采集真实 message/event/session fixtures，记录来源 commit。
+- [ ] 最小 TS reference harness 输出规范化 `trace.jsonl`。
+- [ ] C++ 对相同输入输出 normalized trace，比较事件顺序、消息字段、stopReason、tool-call 聚合等稳定字段。
+- [ ] Tau fixture 只做辅助回归。
 
-**验收标准：**
+**T2：CancellationToken 加固**
 
-1. DeepSeek 或 GLM/OpenAI-compatible endpoint 能逐增量输出完整回答。
-2. 断网/401/429/5xx 的错误路径行为有测试；预期可恢复错误不导致进程崩溃。
-3. SSE 测试覆盖跨 chunk、多个 `data:` 行、注释/空事件、`[DONE]`、畸形 JSON 与取消。
-4. 至少一组 pi `v0.80.0` reference trace 与 picpp normalized trace 一致。
-5. CancellationToken callback 可安全重入只读/查询接口，不因内部锁死锁。
+- [ ] callback snapshot 后锁外执行。
+- [ ] callback 重入、unregister/request 并发、CombinedCancellation 析构竞态测试。
+- [ ] 把 cancellation 作为 `pi-ai` 可复用 public abstraction，不暴露 cpr/curl 类型。
 
-**参考蓝本：** pi `v0.80.0` 的 `packages/ai/src/api/openai-completions.ts`、agent EventStream/stream 相关实现；Tau `v0.4.1` 的 openai compatible / stream / retry / fake 实现只作结构参考。
+**T3：pi-ai Provider/SSE**
 
----
+- [ ] `<pi/ai/provider.hpp>`：Provider public interface。
+- [ ] `<pi/ai/events.hpp>` / `<pi/ai/event_stream.hpp>`：L1 event stream contract。
+- [ ] `src/ai/http.cpp`：cpr/curl private adapter。
+- [ ] `src/ai/openai_compatible.cpp`：请求、SSE、delta merge、tool_calls、finish_reason、usage。
+- [ ] `src/ai/stream_canon.cpp`：Start/Delta/End 归一化。
+- [ ] `src/ai/retry.cpp`：backoff/jitter/Retry-After/错误分类。
+- [ ] FakeProvider 作为 SDK 测试设施或 test support target。
+- [ ] `examples/ai_chat/`：只链接 `pi::ai` 的外部调用示例。
 
-### v0.0.3 — Agent 主循环
+**验收：**
 
-**目标：** 移植系统心脏 runLoop。此版本真实 coding tools 尚未实现，用测试桩工具验证循环语义。
-
-**功能清单：**
-
-- [ ] `agent/tool.hpp`：AgentTool（name/description/schema/execute/executionMode）+ AgentToolResult。
-- [ ] `agent/agent_loop.cpp`：双层 while——外层 follow-up 队列检查、内层 steering/tool 迭代；顺序以 pi `v0.80.0` differential trace 为门。
-- [ ] `agent/agent.hpp/.cpp`：Agent 门面（prompt/steer/followUp/abort/subscribe/waitForIdle）。
-- [ ] `PendingMessageQueue`：内部为 `deque<AgentMessage>`，支持 `QueueMode::OneAtATime` / `QueueMode::All`；steering/follow-up 各自独立；连续 enqueue 多条不得覆盖。
-- [ ] steering / follow-up drain timing 与 pi 对齐：steering 在相应 turn 间隙注入；agent 本可停止时才检查 follow-up。
-- [ ] tool execution 支持默认 parallel 和 per-tool/global sequential 语义；结果消息最终顺序可确定。
-- [ ] 取消链从 Agent.abort() 贯穿 provider 与 tool；aborted 收尾不丢已产出内容。
-- [ ] timing：TTFT/total duration 等本项目扩展字段不得改变 pi 核心行为。
-- [ ] `agent/tool_history.cpp`：repair_tool_history。
-- [ ] provider error → agent 结束当前 run → 下轮可继续。
-
-**验收标准：** FakeProvider + differential harness 覆盖：
-
-1. 多轮工具调用收敛。
-2. `steer(A), steer(B), steer(C)` 不丢消息；one-at-a-time/all 两种模式与 pi 语义一致。
-3. 多条 follow-up 按配置 drain。
-4. parallel / sequential tool batch 行为正确。
-5. 任意时刻 abort 无死锁、无后台线程泄漏。
-6. error 后再次 prompt 可恢复。
+1. 三层 target 的最小外部 consumer 都能 build/link。
+2. `src/` 不再是任何 SDK target 的 PUBLIC include path。
+3. OpenAI-compatible endpoint 可逐增量输出。
+4. SSE/错误/取消路径有完整单测。
+5. 至少一组 pi reference trace 与 C++ normalized trace 一致。
 
 ---
 
-### v0.0.4 — 工具四件套
+### v0.0.3 — pi-agent-core / Agent 主循环
 
-**目标：** 实现 read/write/edit/bash，达到“能真正改代码”的能力。
+**目标：** 完成不依赖 coding tools 具体实现的通用 Agent SDK。
 
-**功能清单：**
+**功能：**
 
-- [ ] `coding/tools/read.cpp`：行范围、行号、截断与二进制策略。
-- [ ] `coding/tools/write.cpp`：整文件写入、父目录创建。
-- [ ] `coding/tools/edit.cpp`：精确字符串替换、唯一匹配校验、行尾风格保持、失败上下文、diff 展示。
-- [ ] `coding/tools/bash.cpp`：reproc++；Unix shell / Windows cmd；超时；CancellationToken；POSIX 进程组 + Windows Job Object；stdout/stderr 截断；退出码。
-- [ ] file mutation queue：edit/write 的冲突写操作串行化。
-- [ ] `beforeToolCall` / `afterToolCall` 钩子，按 pi 行为返回 block/reason/result mutation/terminate。
-- [ ] 参数 schema 校验：错误作为 ToolResult 返回，不让 agent crash。
+- [ ] `<pi/agent/tool.hpp>`：AgentTool / AgentToolResult / executionMode。
+- [ ] `<pi/agent/agent.hpp>`：prompt / steer / followUp / abort / subscribe / waitForIdle。
+- [ ] `<pi/agent/message.hpp>` / events：Agent 层 public contract。
+- [ ] runLoop 双层循环；顺序以 pi differential trace 为门。
+- [ ] `PendingMessageQueue` 使用 `deque<AgentMessage>`；支持 OneAtATime / All。
+- [ ] steering/followUp drain timing 对齐 pi。
+- [ ] tool batch 默认 parallel，支持 per-tool/global sequential。
+- [ ] abort/error 后可正确收尾并再次 prompt。
+- [ ] tool history repair。
+- [ ] `examples/agent_core/`：FakeProvider + test tool 构建独立 Agent，不依赖 coding-agent。
 
-**验收标准：** 工具单测 + FakeProvider “read→edit→bash verify” 完整链路；bash timeout/abort 后无残留进程；计划内工具的关键输入/输出与 pi fixture/differential trace 对齐。
-
----
-
-### v0.1.0 — print 模式 MVP
-
-**目标：** 第一个可真实使用的端到端版本，同时一次性稳定 SessionHeader / SessionEntry 的完整 wire 类型模型，避免 v0.2–v0.8 反复迁移磁盘格式。
-
-**功能清单：**
-
-- [ ] `coding/system_prompt.cpp`：工具清单、guidelines、AGENTS.md 发现注入、cwd/date；可观察内容按 pi `v0.80.0` 对照。
-- [ ] `coding/config.cpp`：settings / custom OpenAI-compatible models / environment API key。
-- [ ] `coding/session/entry.hpp/.cpp`：定义 pi `v0.80.0` 计划内完整 entry union：
-  - SessionHeader（version/id/timestamp/cwd/parentSession 等）
-  - message
-  - thinking_level_change
-  - model_change
-  - compaction
-  - branch_summary
-  - custom
-  - custom_message
-  - label
-  - session_info
-- [ ] 对尚未开放行为的 entry，至少做到 parse/preserve/dump；不要因为当前版本暂时不用就省略 wire 类型。
-- [ ] `coding/session/storage.cpp`：append-only JSONL + crash-aware flush 基础；`--session-dir`。
-- [ ] `cli/main.cpp` + `cli/print_mode.cpp`：`picpp -p`；`--model`；JSON event mode；退出码语义。
-- [ ] README 快速开始。
-
-**验收标准：** 临时项目端到端改文件+运行测试成功；真实 pi session fixtures 能读写关键 entry；未知字段保留/忽略策略有明确兼容规则；旧 entry 不被重写。
+**验收：** `pi::agent_core` 可被外部 app 直接调用；多消息 queue、parallel/sequential、abort/error 差分测试通过。
 
 ---
 
-### v0.2.0 — REPL 交互 + 会话恢复
+### v0.0.4 — pi-coding-agent / 工具四件套
 
-**目标：** 日常可用的交互式行模式；会话可恢复；SessionEntry 类型不再扩 schema，只增加行为。
+**目标：** 在 `pi-agent-core` 上构建 coding domain SDK，达到真正修改代码的能力。
 
-**功能清单：**
+**功能：**
 
-- [ ] 行式输入 + ANSI 流式输出 + 工具调用块。
-- [ ] spinner；Ctrl+C 中止当前轮；明确单击/双击语义。
+- [ ] `<pi/coding/coding_agent.hpp>`：高层 CodingAgent facade，组合 Provider/Agent/tools/session/config。
+- [ ] `<pi/coding/tools.hpp>`：默认 tool factory / registry 的 public API；具体实现保持 private。
+- [ ] read：行范围、行号、截断、二进制策略。
+- [ ] write：整文件写入、父目录创建。
+- [ ] edit：唯一匹配、行尾保持、失败上下文、diff。
+- [ ] bash：reproc++ private implementation；timeout/cancel；POSIX process group + Windows Job Object。
+- [ ] file mutation queue。
+- [ ] beforeToolCall / afterToolCall hook。
+- [ ] tool schema validation。
+- [ ] `examples/coding_agent/`：外部 target 只链接 `pi::coding_agent` 完成 read→edit→bash。
+
+**验收：** CodingAgent SDK 能脱离 `picpp` executable 独立使用；CLI 以后不得绕过 SDK 直接调用 private coding implementation。
+
+---
+
+### v0.1.0 — print MVP + Stable Session Wire
+
+**阶段含义：** **能用。** 第一个真实可用版本。
+
+**目标：** `picpp -p` 端到端，同时稳定 SessionHeader / SessionEntry wire 模型，并完成三层 SDK 的基础安装/导出能力。
+
+**功能：**
+
+- [ ] system prompt：tools/guidelines/AGENTS.md/cwd/date。
+- [ ] config：settings、custom OpenAI-compatible models、API key env。
+- [ ] `<pi/coding/session_entry.hpp>`：计划内完整 SessionEntry union：message、thinking_level_change、model_change、compaction、branch_summary、custom、custom_message、label、session_info 等。
+- [ ] 尚未开放行为的 entry 至少能 parse/preserve/dump。
+- [ ] append-only JSONL storage。
+- [ ] `apps/picpp/print_mode.cpp`：`picpp -p`、`--model`、JSON event mode、退出码。
+- [ ] `install(TARGETS ...)` + `install(DIRECTORY include/)`。
+- [ ] `picppConfig.cmake` + exported targets，使 `find_package(picpp CONFIG REQUIRED)` 可用。
+- [ ] installed-tree consumer test：在临时外部 CMake 项目中分别链接 `pi::ai`、`pi::agent_core`、`pi::coding_agent`。
+
+**验收：** 临时项目用 CLI 可完成“改文件+测试”；另一个纯 C++ consumer 不使用 CLI 也能通过 SDK 完成同类流程；真实 pi session fixtures 可读取关键 entry。
+
+---
+
+### v0.1.1 — REPL + Session Resume
+
+**目标：** 日常可用的行式交互；session 可恢复。
+
+**功能：**
+
+- [ ] REPL + ANSI streaming + tool blocks。
+- [ ] spinner / Ctrl+C。
 - [ ] `/help` `/model` `/clear` `/new` `/save` `/exit`。
-- [ ] Windows VT + UTF-8；非 TTY 自动降级。
-- [ ] `coding/session/tree.cpp`：id/parentId 建树与 path query。
-- [ ] `--continue` / `--resume <id>`：从 SessionEntry 重建上下文、thinking/model 状态。
-- [ ] REPL 只消费 AgentEvent，不复制一套 agent 状态机。
+- [ ] Windows VT + UTF-8；non-TTY 去色。
+- [ ] session id/parentId 基础 tree query。
+- [ ] `--continue` / `--resume <id>`。
+- [ ] REPL 只消费 `pi::coding_agent` public API / events，不复制 agent state machine。
 
-**验收标准：** macOS/Linux/Windows Terminal 人工走查；中文输入输出；interrupt→resume 完整；Ctrl+C 不死锁不脏屏。
+**验收：** 三平台中文输入输出；interrupt→resume 完整；CLI 层无业务状态机复制。
 
 ---
 
-### v0.3.0 — 会话树与上下文压缩
+### v0.1.2 — Session Tree + Compaction
 
-**目标：** 长会话生存能力。
+**目标：** 长会话生存能力与分支探索。
 
-**功能清单：**
+**功能：**
 
-- [ ] `/tree` + `/fork <entryId>`；分叉只追加 entry。
-- [ ] branch summary 使用已稳定的 BranchSummaryEntry wire 类型。
-- [ ] compaction：token 估算、手动/自动触发、CompactionEntry、LLM context 裁剪；原历史不改写。
+- [ ] `/tree` + `/fork <entryId>`。
+- [ ] branch summary entry。
+- [ ] compaction：token 估算、手动/自动触发、CompactionEntry、LLM context 裁剪。
 - [ ] `/cost` `/context`。
-- [ ] compaction 阈值使用模型元数据，但策略不能绑定 Tau catalog 格式。
+- [ ] 大 session 流式 tree/path 查询基础。
+- [ ] 对外 session API 通过 `<pi/coding/session.hpp>` 暴露，不让调用方依赖 storage implementation。
 
-**验收标准：** 超长对话继续工作；分支独立；旧 JSONL 字节不变；pi session fixture 的 compaction/branch 关键字段可兼容读取。
+**验收：** 超长对话继续；两条分支独立；旧 JSONL 不重写；pi compaction/branch fixture 可兼容读取。
 
 ---
 
-### v0.4.0 — 多 Provider（Anthropic + 模型目录）
+### v0.1.3 — Anthropic + Model Catalog
 
-**目标：** 补齐第二条原生协议并数据驱动模型元数据。
+**目标：** 第二条原生 Provider 协议与数据驱动模型元数据。
 
-**功能清单：**
+**功能：**
 
-- [ ] `ai/anthropic.cpp`：Anthropic Messages SSE、thinking/signature、stop reason、usage。
-- [ ] thinking level 内部归一化，但 wire/Provider 请求以各协议真实语义为准。
-- [ ] `coding/catalog.cpp`：**元数据以 pi `v0.80.0` 为第一来源**；可以借鉴 Tau `catalog.toml` 的文件组织方式，但不能直接把 Tau 数据当兼容规范。
-- [ ] 用户覆盖层：`~/.picpp/catalog.toml` 或等价稳定配置格式。
-- [ ] `/model` runtime switch；写 model_change entry。
+- [ ] `pi-ai` Anthropic Messages SSE、thinking/signature、stop reason、usage。
+- [ ] thinking level 内部归一化，但 Provider wire 各自保持真实语义。
+- [ ] `pi-coding-agent` model catalog；**元数据以 pi `v0.80.0` 为第一来源**，Tau 仅参考文件组织。
+- [ ] 用户 catalog override。
+- [ ] runtime model switch + model_change entry。
 - [ ] compat flags 数据驱动化。
 
-**验收标准：** Anthropic 原生 + 至少两个 OpenAI-compatible endpoint；同 session 切模型；加普通兼容 Provider 主要通过配置完成；context/cost 元数据有来源说明。
+**验收：** Anthropic + 至少两个 OpenAI-compatible endpoint；同 session 切模型；Provider 实现变化不破坏 `pi::agent_core` public API。
 
 ---
 
-### v0.5.0 — TUI（FTXUI）
+### v0.2.0 — TUI
 
-**目标：** 从行模式升级为全屏组件化交互；UI 不改变 agent/session 核心语义。
+**阶段含义：** **好用。** 从“能用”进入日常工具形态。
 
-**功能清单：**
+**目标：** 全屏组件化前端，但 TUI 完全位于 `apps/picpp`，核心 SDK 不增加 UI 依赖。
 
-- [ ] 前置 go/no-go spike：Windows Terminal/conhost/WezTerm 的 CJK 全宽、IME、粘贴、跨线程事件投递。
-- [ ] 若 spike 不达标，版本降级为增强 REPL/raw-mode line editor，FTXUI 不强行上线。
-- [ ] 消息流区、工具折叠块、Markdown 基础渲染。
-- [ ] 多行输入、历史、粘贴。
-- [ ] 状态栏：model/context/cost/branch。
+**功能：**
+
+- [ ] FTXUI CJK/IME/Windows Terminal/conhost/WezTerm go/no-go spike。
+- [ ] 不达标时降级增强 REPL/raw mode，不强行污染 SDK。
+- [ ] message stream、tool fold、Markdown basic rendering。
+- [ ] multiline input/history/paste。
+- [ ] model/context/cost/branch status。
 - [ ] beforeToolCall approval UI。
-- [ ] 主题基础。
-- [ ] `--no-tui` 保留。
+- [ ] theme + `--no-tui`。
 
-**验收标准：** CJK/IME 正确；长会话不卡顿；所有核心行为可经非 TUI 模式回归验证。
-
----
-
-### v0.6.0 — RPC 模式 + 只读工具
-
-**目标：** 先稳定 headless 集成协议，不把扩展进程协议同时塞入本版本。
-
-**功能清单：**
-
-- [ ] `picpp --mode rpc`：stdin/stdout JSONL。
-- [ ] 计划内命令：prompt/steer/followUp/abort/fork/compact/status/exit 等；实际命令集以 pi `v0.80.0` 为来源并在 Compatibility Matrix 标注覆盖情况。
-- [ ] AgentEvent 以通知形式回流。
-- [ ] `grep` / `find` / `ls` 工具。
-- [ ] ignore/path/truncation 行为尽量对齐 pi，不自创“gitignore 子集”语义后再称 Compatible；若必须偏差则明确标 Partial。
-
-**验收标准：** harness 经 RPC 驱动 prompt→tools→fork→exit；stdout 始终保持协议纯净，日志走 stderr；grep/find/ls 有大目录和取消测试。
+**验收：** `pi_ai` / `pi_agent_core` / `pi_coding_agent` targets 均不 link FTXUI；所有核心行为仍能在非 TUI consumer tests 回归。
 
 ---
 
-### v0.7.0 — 扩展协议 v1
+### v0.2.1 — RPC + grep/find/ls
 
-**目标：** 在 RPC 稳定后再设计 C++ 的进程外扩展模型；实现方式允许不同于 pi TS extensions，但行为面明确映射。
+**目标：** headless 集成与补齐计划内只读工具。
 
-**功能清单：**
+**功能：**
 
-- [ ] `~/.picpp/extensions/*.json` 声明式扩展。
-- [ ] 子进程 handshake + protocolVersion + capabilities。
+- [ ] `picpp --mode rpc` stdin/stdout JSONL。
+- [ ] prompt/steer/followUp/abort/fork/compact/status/exit 等计划内命令。
+- [ ] Agent/Coding events 以通知形式输出。
+- [ ] grep/find/ls。
+- [ ] ignore/path/truncation 行为按 pi 对齐；偏差则标 Partial。
+- [ ] RPC adapter 只调用 `pi::coding_agent` public API，不访问 private `src/coding`。
+
+**验收：** harness 经 RPC 驱动完整流程；stdout 协议纯净、日志 stderr；大目录/取消测试通过。
+
+---
+
+### v0.2.2 — Extensions v1
+
+**目标：** 建立 C++ 进程外扩展模型，不复制 TS 动态加载机制。
+
+**功能：**
+
+- [ ] extension manifest。
+- [ ] subprocess handshake + protocolVersion + capabilities。
 - [ ] register_tool / register_command。
 - [ ] beforeToolCall / afterToolCall 等首批 hook。
-- [ ] 生命周期：spawn/ready/timeout/cancel/crash/restart/disable。
-- [ ] stdout 协议与 stderr 日志隔离。
-- [ ] examples：permission-gate、subagent。
-- [ ] Extension Compatibility Matrix：逐个标 pi extension event/hook 的 Supported / Planned / Not Applicable。
+- [ ] spawn/ready/timeout/cancel/crash/restart/disable 生命周期。
+- [ ] stdout protocol / stderr log 隔离。
+- [ ] permission-gate、subagent examples。
+- [ ] `<pi/coding/extension.hpp>` 只暴露稳定 host-side API；协议 parser private。
+- [ ] Extension Compatibility Matrix。
 
-**验收标准：** extension crash 不拖垮主 agent；permission gate 真正阻断危险调用并返回 reason；subagent 生命周期和取消可控。
+**验收：** extension crash 不拖垮主 agent；permission gate 能 block；subagent cancel 可控。
 
 ---
 
-### v0.8.0 — Skills / Prompts / Resilience
+### v0.2.3 — Skills / Prompts / Resilience
 
-**目标：** 把之前堆在 v1.0 的真实用户能力和存储韧性提前完成。
+**目标：** 补齐高频用户能力和 session 韧性，为 v0.3.0 功能冻结做准备。
 
-**功能清单：**
+**功能：**
 
 - [ ] Skills discovery / expansion。
 - [ ] Prompt templates → slash commands。
-- [ ] JSONL 半行/崩溃恢复策略。
-- [ ] 可配置 retry policy。
+- [ ] JSONL 半行/崩溃恢复。
+- [ ] configurable retry policy。
 - [ ] 大 session 流式读取/低峰值内存。
-- [ ] session format compatibility tests：旧 fixture、损坏尾行、未知 entry/字段。
+- [ ] old fixture / corrupted tail / unknown entry-field compatibility tests。
+- [ ] skills/prompts 功能在 CLI/TUI/RPC 和纯 SDK consumer 中共享同一 coding layer。
 
-**验收标准：** 真实大 session 可恢复；崩溃尾行不破坏此前历史；skills/prompts 在 REPL/TUI/RPC 共享同一业务层。
-
----
-
-### v0.9.0 — Release Hardening
-
-**目标：** 不再扩主功能面，集中处理性能、打包、跨平台、E2E 和兼容缺口。
-
-**功能清单：**
-
-- [ ] Compatibility Matrix 全量审计：所有计划内项必须变成 Compatible 或有明确且接受的 Partial 偏差。
-- [ ] 性能基线：冷启动、空闲内存、大 session 加载、长 TUI 滚动；阈值以实际 release build 基准后再锁定，避免路线图提前写不现实数字。
-- [ ] GitHub Releases：Windows/macOS/Linux executable artifact + checksums + 安装说明。
-- [ ] E2E matrix：平台 × Provider 协议 × print/REPL/TUI/RPC。
-- [ ] 文档：架构、配置、session 格式、RPC、extensions、兼容矩阵、FAQ。
-- [ ] release candidate 阶段只接收 bugfix / compatibility fix / docs。
+**验收：** 大 session 可恢复；崩溃尾行不破坏历史；无 CLI-only 业务实现。
 
 ---
 
-### v1.0.0 — Compatibility Freeze
+### v0.3.0 — Core Complete / Compatibility & API Freeze Candidate
 
-**目标：** 正式冻结 v1 的计划内用户契约。**本版本不新增功能。**
+**阶段含义：** **pi `v0.80.0` 的计划内核心 Coding Agent 功能基本完成。** 不是 pi 全功能克隆。
+
+**目标：** 从“继续补功能”切换成“收敛契约”。本版本之后原则上不再新增主功能面。
 
 **准入条件：**
 
-- [ ] v0.9.0 Release Hardening 全部完成。
-- [ ] 计划内 Compatibility Matrix 无未解释的 Planned 项。
-- [ ] 三平台 release artifact 从干净机器可运行。
-- [ ] 全部 deterministic compatibility/differential tests 通过。
-- [ ] E2E smoke matrix 通过。
+- [ ] `pi-ai`：计划内 Provider/API/event/cancellation 主干完成。
+- [ ] `pi-agent-core`：runLoop、queue、tool execution、abort/error 主干 Compatible。
+- [ ] `pi-coding-agent`：默认工具、只读工具、session tree/compaction、config/catalog、extensions/skills 计划内能力完成或明确 Partial。
+- [ ] print/REPL/TUI/RPC 已有稳定适配层。
+- [ ] 三层 SDK 均有 build-tree + install-tree external consumer tests。
+
+**功能冻结工作：**
+
+- [ ] Compatibility Matrix 全量审计；无未解释 Planned 项。
+- [ ] public headers 审计：命名、ownership、include hygiene、异常/错误/生命周期约定。
+- [ ] CMake export/install/package config 审计。
+- [ ] 对 public API 做第一轮 freeze candidate，删除明显不合理的临时 API。
+- [ ] SDK examples/API reference 文档。
+- [ ] sanitizer / stress / cancellation race / session corruption tests 补齐。
+
+**验收：** `v0.3.0` 后新增需求默认进入 post-v1 backlog，除非属于兼容缺失或阻塞 v1 的必要修复。
+
+---
+
+### v0.3.x — Hardening / Release Candidate
+
+**目标：** 不扩功能，只提升稳定性与发布质量。
+
+允许：
+
+- compatibility fix
+- bugfix
+- public API freeze 修正
+- performance/memory
+- cross-platform fix
+- packaging/install/export fix
+- tests/docs/release tooling
+
+不允许：
+
+- 新 Provider 大类
+- 新 UI 模式
+- 新扩展体系
+- 与 v1 目标无关的大规模 feature
+
+重点工作：
+
+- [ ] E2E matrix：平台 × Provider 协议 × print/REPL/TUI/RPC。
+- [ ] SDK consumer matrix：build tree / install tree / static/shared（若支持）/三平台。
+- [ ] 冷启动、空闲内存、大 session、长 TUI 等基准。
+- [ ] release artifact + checksums + install guide。
+- [ ] known deviations / migration / API reference 完整。
+
+---
+
+### v1.0.0 — Stable Contract
+
+**目标：** 冻结路线图承诺范围内的行为兼容契约与 C++ public SDK/API。**不新增功能。**
+
+**准入条件：**
+
+- [ ] `v0.3.x` RC 稳定。
+- [ ] Compatibility Matrix 无未解释 Planned 项。
+- [ ] 三平台 executable artifact 可从干净机器运行。
+- [ ] `find_package(picpp CONFIG REQUIRED)` 在三平台干净 consumer 工程通过。
+- [ ] `pi::ai`、`pi::agent_core`、`pi::coding_agent` public headers/API 文档完整。
+- [ ] deterministic differential tests 全绿。
+- [ ] E2E smoke matrix 全绿。
 - [ ] CHANGELOG / README / migration / known deviations 完整。
 
-**验收标准：** tag `v1.0.0` 只包含 release/bugfix/docs 类改动；用户可根据 Compatibility Matrix 准确知道与 pi `v0.80.0` 哪些地方兼容、哪些地方明确不同。
+**v1.0.0 的含义：** 对“我们承诺实现的 pi `v0.80.0` 核心子集”稳定负责，而不是宣称复制 pi 的所有 Provider、认证、扩展实现和外围功能。
 
 ---
 
-## 6. 测试策略
+## 7. 测试策略
 
-1. **单元测试（doctest）**：序列化、SSE parser、delta merger、diff/truncate、session tree、cancel races 等纯逻辑。
-2. **pi 真实黄金样本**：固定 `v0.80.0` tag 生成/采集，保留来源；会话/消息/wire fixture 是兼容门。
-3. **Differential tests**：同一确定性输入分别跑 pi reference harness 与 picpp，规范化后比较 event trace / message / tool ordering / stop semantics。它是 Agent/Session/RPC 兼容的最高优先级测试。
-4. **FakeProvider 集成测试**：确定性驱动 runLoop/tool/cancel/steering/follow-up。
-5. **Tau fixtures**：只做辅助互操作/实现回归，不得单独证明 pi compatibility。
-6. **真实端点冒烟**：本地或可选 scheduled workflow；不在普通 PR CI 强制依赖 secrets。
-7. **跨平台回归门**：每个版本 Linux/macOS/Windows CI 全绿；涉及终端/进程树的版本另加真实人工/VM 走查。
-8. **版本 closeout**：更新 Compatibility Matrix、记录设计偏差和新增 known deviations。
+1. **SDK 单元测试**：按 `ai/agent/coding` 分层；序列化、SSE、delta merge、session tree、cancel races、tools 等。
+2. **Public consumer tests**：每层至少一个独立 target，只 include `<pi/...>`，不允许添加 `src/` include path。
+3. **Install-tree tests**：安装后新建干净 CMake consumer，用 `find_package(picpp CONFIG REQUIRED)` 编译运行。
+4. **pi 真实黄金样本**：固定 `v0.80.0` tag，记录生成来源与 commit。
+5. **Differential tests**：同一确定性输入分别跑 pi reference harness 与 picpp，规范化后比较 event/message/tool ordering/stop/session/RPC semantics。
+6. **FakeProvider tests**：确定性驱动 runLoop/tool/cancel/steering/followUp。
+7. **Tau fixtures**：只作辅助互操作与实现回归。
+8. **真实 endpoint smoke**：本地或可选 scheduled workflow；普通 PR CI 不依赖 secret。
+9. **跨平台门**：Linux/macOS/Windows CI；终端/进程树额外真实走查。
+10. **版本 closeout**：更新 Compatibility Matrix、SDK API changes、known deviations。
 
-### 6.1 差分测试规范化原则
+### 7.1 差分规范化原则
 
-允许规范化的典型非确定字段：UUID、绝对时间戳、真实 duration、临时目录绝对路径、平台特有换行（仅在 pi 本身不承诺差异时）。
+可以规范化：UUID、绝对时间、真实 duration、临时目录绝对路径，以及 pi 本身不承诺一致的平台换行。
 
-不得通过规范化隐藏：事件顺序、message role/type、tool call/result pairing、stopReason、queue drain 顺序、session parentId 关系、RPC command semantics、用户可见错误分类。
+不能通过规范化隐藏：event ordering、message role/type、tool call/result pairing、stopReason、queue drain、session parentId、RPC semantics、用户可见错误分类。
+
+### 7.2 SDK 架构测试门
+
+每个 PR 至少满足：
+
+- public header self-contained：单独 include 可编译。
+- `pi::ai` consumer 不链接 agent/coding。
+- `pi::agent_core` consumer 不链接 coding。
+- `pi::coding_agent` consumer 不需要 CLI/TUI。
+- `apps/picpp` 不 include `src/ai` / `src/agent` / `src/coding` private headers。
+- 安装/导出相关改动必须跑 install-tree smoke test。
 
 ---
 
-## 7. 非目标（v1.0.0 前明确不做）
+## 8. 非目标（v1.0.0 前明确不做）
 
-- MCP 内置实现；需要时优先考虑 extension 适配。
-- OAuth 完整流程与 credential 加密存储。
-- 内置容器/VM 沙箱。
-- 终端图片、HTML 导出、遥测、自更新。
+- MCP 内置实现；需要时优先通过 extension 适配。
+- OAuth 完整流程和 credential 加密存储。
+- 内置 container/VM sandbox。
+- terminal images、HTML export、telemetry、self-update。
 - C++20 coroutine/modules。
-- pi `v0.80.0` 中除 OpenAI Chat Completions compatible 与 Anthropic Messages 外的其他 Provider 原生协议，例如 openai-responses / bedrock / vertex / mistral 等。
-- 与 pi TS 扩展系统“实现机制完全相同”；本项目只对文档中承诺的扩展行为面负责。
+- pi `v0.80.0` 中 OpenAI Chat Completions compatible 和 Anthropic Messages 之外的其他 Provider 原生协议，例如 openai-responses / bedrock / vertex / mistral 等。
+- 与 pi TS extension system “实现机制完全相同”；只对声明的行为面负责。
+- v1.0 前 ABI 稳定承诺；v1.0 重点先冻结 source/API compatibility，ABI 是否承诺需在 v0.3.x 单独评估。
 
 ---
 
-## 8. 风险与对策
+## 9. 风险与对策
 
 | 风险 | 等级 | 对策 |
 |---|---|---|
-| “兼容 pi”范围失控 | 高 | Compatibility Matrix + Planned/Out-of-Scope 明示；只对已承诺子集做兼容声明 |
-| 仅靠源码阅读产生错误兼容结论 | 高 | v0.0.2 起建立固定 pi reference harness + differential test |
-| Session wire 随版本反复迁移 | 高 | v0.1.0 一次性定义完整计划内 SessionEntry union；后续只增加行为 |
-| steering/follow-up 丢消息 | 高 | deque + QueueMode；多消息差分测试；禁止单槽实现 |
-| Windows 终端/编码/进程模型 | 高 | 从第一天 CI；Job Object；v0.5.0 CJK/IME spike；真实 Windows 走查 |
-| CancellationToken callback 死锁/UAF | 高 | v0.0.2 前锁外执行 callback；unregister/request/destructor race 单测 |
-| Provider 兼容服务器碎片化 | 中 | compat flags 数据驱动；只对实测/声明范围承诺 Compatible |
-| FTXUI CJK/IME 不达标 | 中 | go/no-go spike；增强 REPL 作为稳定退路 |
-| 扩展协议范围膨胀 | 中 | RPC 与 extensions 分版本；v0.7.0 先冻结 protocol v1 最小事件面 |
-| variant 深嵌套可读性 | 中 | visit helper + domain facade；禁止业务代码散落裸 `std::get` |
-| 单人项目周期过长 | 中 | 每版本独立可用；v0.1.0 后任意 tag 都保持可运行；v1.0 不再塞新功能 |
+| SDK 边界晚拆导致 CLI 与核心耦合 | 高 | v0.0.2 第一优先级迁移 `include/` + 三 target；后续 consumer test 强制守边界 |
+| `src/` 被当 public API 继续扩散 | 高 | 禁止 PUBLIC include src；public-header lint/consumer build test |
+| 三层依赖形成循环 | 高 | 固定 `pi-ai → pi-agent-core → pi-coding-agent` 单向依赖；CMake target graph 检查 |
+| public API 泄漏 cpr/reproc/FTXUI | 高 | 第三方类型默认 private；public abstraction 独立设计 |
+| “兼容 pi”范围失控 | 高 | Compatibility Matrix + Planned/Out-of-Scope |
+| 只靠源码阅读误判语义 | 高 | v0.0.2 起固定 differential harness |
+| Session wire 反复迁移 | 高 | v0.1.0 一次性定义计划内完整 SessionEntry union |
+| steering/followUp 丢消息 | 高 | deque + QueueMode + 多消息差分测试 |
+| CancellationToken deadlock/UAF | 高 | v0.0.2 锁外 callback + race tests |
+| Windows terminal/process 差异 | 高 | 三平台 CI；Job Object；TUI spike；真实走查 |
+| Provider 碎片化 | 中 | compat flags；只对实测/声明范围承诺 Compatible |
+| FTXUI CJK/IME 不达标 | 中 | go/no-go spike；增强 REPL 退路 |
+| Extensions 范围膨胀 | 中 | v0.2.2 冻结最小 protocol v1 |
+| 0.x 版本号看起来增长过快 | 低 | 使用 0.1.x/0.2.x 阶段内里程碑；0.3.0 才代表核心功能完成 |
+| 单人周期过长 | 中 | 每个 tag 可运行；0.1.0 后始终保持可用；0.3.0 后冻结功能 |
 
 ---
 
-## 9. 开发方法论（学习驱动 · 文章级设计文档 · 版本 tag）
+## 10. 开发方法论
 
-本仓库是**学习型项目**：一边学习 pi 架构一边用 C++17 实现。每个版本固定节奏，产出设计文章、代码、兼容证据和 tag。
+本仓库是学习型项目：一边研究 pi 架构，一边形成 C++17 的可复用 SDK。每个版本产出 **设计文章、代码、兼容证据、SDK consumer 示例和 tag**。
 
-### 9.1 每版本标准工作流
+### 10.1 每版本工作流
 
-1. **基线取证**：先确定该版本对应的 pi `v0.80.0` 源码、fixture 和可观察行为；不得先看 Tau 就直接定兼容语义。
-2. **设计先行**：完成 `docs/design/vX.Y.Z.md`，写清原理、候选方案、pi 行为、C++ 设计与已知偏差。
-3. **任务拆解**：TDD bite-sized tasks；兼容任务优先写 reference fixture / differential red test。
-4. **实现**：小步提交；feat/fix/test/docs；关键路径引用 pi tag 文件路径/行为来源。
-5. **验收**：单元 + FakeProvider + differential + 三平台 CI；涉及真实终端/进程/Provider 的版本再做专项走查。
-6. **回顾**：设计文档末尾记录实际偏差、踩坑、遗留问题和 Compatibility Matrix 变化。
-7. **收尾打 tag**：更新 `CHANGELOG.md`、README 路线图与 Compatibility Matrix，打 annotated tag。
+1. **基线取证**：先确定 pi `v0.80.0` 对应源码、fixture 和可观察行为。
+2. **Public API 识别**：设计阶段先划分哪些类型/API 属于 `pi-ai`、`pi-agent-core`、`pi-coding-agent` public contract，哪些必须 private。
+3. **设计先行**：完成 `docs/design/vX.Y.Z.md`，写清机制、候选方案、pi 行为、C++ SDK/API、已知偏差。
+4. **TDD 拆解**：兼容任务先写 differential red test；SDK API 先写 consumer compile test。
+5. **实现**：小步提交；业务功能只能进入 SDK，CLI/TUI 只做 adapter/rendering/input。
+6. **验收**：unit + consumer + FakeProvider + differential + 三平台 CI。
+7. **回顾**：记录 API 变化、实现偏差、踩坑、Compatibility Matrix 变化。
+8. **收尾 tag**：更新 CHANGELOG、README、Compatibility Matrix、SDK examples/API docs。
 
-### 9.2 设计文档 = 可发表文章
+### 10.2 设计文档要求
 
-- **自包含**：读者无上下文也能理解项目、本版本位置与问题背景。
-- **先行为后实现**：先写 pi `v0.80.0` 可观察行为，再写 Tau 参考和 C++ 实现。
-- **讲原理**：SSE 分帧、JSONL 树、进程组、取消并发等必须讲机制，不只列 API。
-- **展示真实代码/wire**：关键 C++ interface、JSON、trace 示例进正文。
-- **决策透明**：候选方案、取舍、兼容影响。
-- **正文/附录分离**：checklist、任务拆解、差分样本表、蓝本映射放附录。
+- 自包含，说明当前版本在整体成熟度中的位置。
+- 先写 pi `v0.80.0` 可观察行为，再写 Tau 参考和 C++ 设计。
+- 必须有“SDK 边界”章节：public headers、target dependencies、生命周期、错误模型。
+- 展示真实 C++ public interface / JSON / trace 示例。
+- 候选方案与取舍透明。
+- checklist、差分样本、API mapping 放附录。
 
-### 9.3 学习导向原则
+### 10.3 SDK-first 原则
 
-- 不熟悉的机制先做 spike/最小实验，再写设计，不凭印象定 API。
-- “Tau 更容易抄”不能成为偏离 pi 行为的理由。
-- 每版本沉淀 C++17 技术点、pi 架构原理、差分测试发现的语义细节。
+- 新能力先问“外部 C++ 调用者如何用”，再问 CLI 怎么展示。
+- `picpp` 能做的核心业务操作，原则上都应有对应 `pi::coding_agent` API。
+- `pi-agent-core` 应能脱离 coding tools 独立驱动通用 Agent。
+- `pi-ai` 应能脱离 Agent 独立做 Provider streaming。
+- CLI/TUI/RPC 都是 adapter，不拥有核心状态机。
 
-### 9.4 版本纪律
+### 10.4 版本纪律
 
 - 主干始终可构建；CI 红为最高优先级。
-- 每个版本都是可发布状态：构建绿、测试绿、上版功能不回退。
-- 已发布版本的历史事实不在路线图中反向改写；发现问题记录为后续修复/known deviation。
-- **v0.9.0 起冻结功能面；v1.0.0 不新增功能，只允许兼容修复、bugfix、release 与文档改动。**
+- 每个版本都可发布，上版功能不回退。
+- 已发布历史事实不反向改写，发现问题写后续 fix/known deviation。
+- `v0.3.0` 起冻结主功能面；`v0.3.x` 只做稳定化；`v1.0.0` 不新增功能。
+- `v1.0.0` 后 public SDK/API 按 SemVer 管理。
