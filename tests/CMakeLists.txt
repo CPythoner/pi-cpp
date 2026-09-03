@@ -43,3 +43,8 @@ picpp_add_sdk_consumer_test(
     "${CMAKE_CURRENT_SOURCE_DIR}/consumer/test_coding_agent_sdk.cpp"
     pi::coding-agent
 )
+
+add_test(NAME picpp_version COMMAND $<TARGET_FILE:picpp> --version)
+set_tests_properties(picpp_version PROPERTIES
+    PASS_REGULAR_EXPRESSION "^picpp v0\\.0\\.1"
+)
