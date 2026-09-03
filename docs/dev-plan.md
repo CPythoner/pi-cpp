@@ -2,9 +2,9 @@
 
 > **For agentic workers:** 本文档是主路线图。每个版本启动时，先用 writing-plans 流程把该版本拆解为任务级实施计划（TDD、bite-sized tasks），再进入实现。各版本内的功能清单用 checkbox 跟踪。
 
-**目标：** 用 C++17 实现 pi agent（github.com/earendil-works/pi，TS monorepo）的核心功能——一个可交互的终端 coding agent CLI，会话格式与 pi/tau 兼容。
+**目标：** 用 C++17 实现 pi agent（github.com/earendil-works/pi，TS monorepo）的核心功能——一个可交互的终端 coding agent CLI。行为与协议兼容基线固定为 pi `v0.80.0`；Tau `v0.4.1` 仅作为实现参考。
 
-**架构：** 三层移植，以 HuggingFace tau（pi 架构的 Python 参考实现）为蓝本逐文件对照翻译：`agent`（≈tau_agent，消息/事件/主循环）→ `ai`（≈tau_ai，Provider/SSE）→ `coding`（≈tau_coding，工具/会话/配置）+ `cli`/`tui` 前端。单二进制、错误即消息、append-only JSONL 树状会话。
+**架构：** 三层移植，以 pi `v0.80.0` 定义行为语义，以 HuggingFace Tau `v0.4.1`（pi 架构的 Python 参考实现）辅助理解模块划分和实现方式：`agent`（≈tau_agent，消息/事件/主循环）→ `ai`（≈tau_ai，Provider/SSE）→ `coding`（≈tau_coding，工具/会话/配置）+ `cli`/`tui` 前端。单二进制、错误即消息、append-only JSONL 树状会话。
 
 **技术栈：** C++17 · CMake ≥3.25 + FetchContent · cpr(SSE) · nlohmann/json · reproc++ · fmt · doctest · FTXUI(后期) · cxxopts
 
@@ -14,6 +14,8 @@
 
 | 决策项 | 选择 |
 |---|---|
+| 行为兼容基线 | **pi `v0.80.0`**；API、CLI、事件、会话、工具调用及 wire 语义均以该 tag 的可观察行为为准 |
+| Tau 参考版本 | **Tau `v0.4.1`**；仅参考模块拆分、算法和工程实现，不作为行为规范来源 |
 | 语言标准 | **C++17**（编译器基线放宽到 GCC 9+ / Clang 7+ / VS2019+；取消链用自研 CancellationToken，语义对齐 std::stop_token，未来可平替；格式化统一用 fmt） |
 | UI 形态 | v0.1.0 print 模式 → v0.2.0–v0.4.0 行式 REPL + ANSI 流式输出 → v0.5.0 起迭代 FTXUI TUI |
 | Provider 策略 | v0.0.2 先打通 OpenAI 兼容协议；v0.4.0 加 Anthropic 原生协议 |
@@ -21,13 +23,25 @@
 | 依赖策略 | 轻依赖：cpr、nlohmann/json、reproc、fmt、cxxopts、doctest、FTXUI，全部 FetchContent + pin tag |
 | 二进制名 | `picpp`；配置目录 `~/.picpp/`；C++ 命名空间 `pi` |
 
+### 1.1 兼容基线与冲突裁决
+
+pi `v0.80.0` 与 Tau `v0.4.1` 并非同期基线。本项目采用“**pi 定义行为，Tau 参考实现**”的双参考策略：
+
+1. API、CLI、事件、会话、工具调用和 wire 格式以 pi `v0.80.0` 为规范来源。
+2. C++ 类型设计、模块组织、并发模型、存储算法等可以参考 Tau `v0.4.1` 的实现方式。
+3. 两者出现差异时，按 **pi `v0.80.0` 可观察行为 > 本项目兼容规范 > Tau `v0.4.1` 实现** 的顺序裁决。
+4. Tau `v0.4.1` 中来自更高版本 pi 或其自行扩展的能力，只能进入扩展清单或后续版本，不能作为当前兼容基线的必需能力。
+5. 兼容测试必须以 pi `v0.80.0` 的真实样本或差分行为为主；Tau 样本仅用于辅助互操作验证。
+
+特别说明：`packages/orchestrator` 在 pi `v0.80.0` 中尚不存在，后来才作为实验包加入，并在 pi `v0.81.0` 改名为 `packages/server`。即使 Tau `v0.4.1` 含有类似能力，也不属于当前基线的缺失项，应作为后续扩展单独规划。
+
 ## 2. 参考蓝本要点（两仓库分析结论）
 
-**pi**（TS，~10.6 万行核心）：四包 ai/agent/coding-agent/tui。核心是 `packages/agent/src/agent-loop.ts:155` 的 runLoop 双层循环（外层 followUp 队列、内层工具迭代）+ AgentEvent 事件流 + JSONL 树状会话（id/parentId）。核心无权限系统、无 MCP——审批靠 `beforeToolCall` 钩子，集成靠扩展系统。默认工具就 4 个：read/write/edit/bash。
+**pi `v0.80.0`**（TS，~10.6 万行核心）：四包 ai/agent/coding-agent/tui。核心是 `packages/agent/src/agent-loop.ts:155` 的 runLoop 双层循环（外层 followUp 队列、内层工具迭代）+ AgentEvent 事件流 + JSONL 树状会话（id/parentId）。核心无权限系统、无 MCP——审批靠 `beforeToolCall` 钩子，集成靠扩展系统。默认工具就 4 个：read/write/edit/bash。
 
-**tau**（HuggingFace 官方 Python 复刻，核心仅 ~7,400 行）：与 pi 架构一一同构、wire 格式兼容（camelCase JSON、会话 JSONL 可互读）、零 SDK 依赖（全部手写 SSE，可逐行翻译成 C++）。其 `dev-notes/` 有 phase-1…28 施工日志，是被验证过的增量顺序，本路线图的版本划分即以其为骨架。
+**Tau `v0.4.1`**（HuggingFace 官方 Python 复刻，核心仅 ~7,400 行）：模块组织与 pi 高度对应、零 SDK 依赖（全部手写 SSE，便于参考 C++ 实现）。其 `dev-notes/` 有 phase-1…28 施工日志，可用于参考增量实施顺序；但它与 pi `v0.80.0` 并非同期基线，任何 wire 兼容结论都必须回到 pi `v0.80.0` 验证。
 
-**关键移植原则（两仓库共同确认）：**
+**关键移植原则（行为由 pi `v0.80.0` 确认，Tau `v0.4.1` 辅助实现）：**
 1. 错误不抛异常，编码为 `stopReason: "error"` 的 AssistantMessage（循环韧性的核心）
 2. 消息双层模型：会话里存 AgentMessage（含 bash 执行记录等应用消息），仅在调 LLM 边界 convertToLlm 降维
 3. 会话是 append-only JSONL **树**（id/parentId），fork/branch/压缩都是追加 entry 而非改写历史
@@ -138,7 +152,7 @@ pi-cpp/
   - StopReason 枚举：`stop | length | toolUse | error | aborted`
   - camelCase JSON 序列化（NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE，别名与 tau `messages.py` 的 wire 别名逐一对照）
 - [ ] `agent/events.hpp/.cpp`：L1（AssistantStart/Done/Error + Text/Thinking/ToolCall 各 Start/Delta/End）+ L2（agent_start/end、turn_start/end、message_start/update/end、tool_execution_start/update/end）两套 variant
-- [ ] `tests/fixtures/`：从 tau/pi 会话 JSONL 提取黄金样本，round-trip 测试（parse→dump→byte 级或语义级一致）
+- [ ] `tests/fixtures/`：以 pi `v0.80.0` 会话 JSONL 作为主黄金样本，Tau `v0.4.1` 样本仅作辅助互操作验证；执行 round-trip 测试（parse→dump→byte 级或语义级一致）
 
 **验收标准：** 三平台 CI 全绿；消息/事件 round-trip 单测通过（含 pi 真实会话样本）；`picpp` 空壳 `--version` 可运行。
 
@@ -346,7 +360,7 @@ pi-cpp/
 ## 6. 测试策略
 
 1. **单元测试**（doctest）：类型序列化、SSE 解析状态机、delta 合并、diff、截断、树查询——纯逻辑全覆盖
-2. **黄金样本**：pi/tau 真实会话 JSONL 进 fixtures，保证 wire 兼容是持续回归而非一次性努力
+2. **黄金样本**：pi `v0.80.0` 真实会话 JSONL 是主 fixtures 和兼容门；Tau `v0.4.1` 样本只做辅助互操作回归
 3. **FakeProvider 集成测试**：事件脚本驱动主循环/工具/取消/steering 的确定性回放（对照 tau 46,908 行测试的思路，C++ 侧按比例精简但保住关键路径）
 4. **真实端点冒烟**：本地手动/可选 nightly（secrets 走环境变量），不在 PR CI 强制
 5. **每版本回归门**：CI 三平台 matrix 全绿才可合入
@@ -403,7 +417,7 @@ pi-cpp/
 ### 9.3 学习导向原则
 
 - 遇到不熟悉的机制，先在设计文档「原理讲解」章节写明白再动手实现。
-- 对照翻译纪律：改行为必须有理由，默认与 tau 蓝本语义一致（wire 兼容是硬约束）。
+- 对照实现纪律：改行为必须有理由，默认与 pi `v0.80.0` 的可观察语义一致；Tau `v0.4.1` 只用于参考实现方式（wire 兼容是硬约束）。
 - 每版本沉淀「学习要点」：本版本用到的 C++17 技术点（原理+坑）与 pi 架构原理讲解。
 
 ### 9.4 版本纪律
