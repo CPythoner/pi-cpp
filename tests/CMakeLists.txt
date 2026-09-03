@@ -37,6 +37,14 @@ picpp_add_private_test(test_thread_guard "${CMAKE_CURRENT_SOURCE_DIR}/util/test_
 picpp_add_test(test_message_json "${CMAKE_CURRENT_SOURCE_DIR}/agent/test_message_json.cpp" pi::agent)
 picpp_add_test(test_events_json "${CMAKE_CURRENT_SOURCE_DIR}/agent/test_events_json.cpp" pi::agent)
 
+# Compatibility trace producer. It is compiled on every platform but only
+# executed by the Linux reference workflow against the exact pi v0.80.0 checkout.
+add_executable(
+    pi_reference_trace
+    "${CMAKE_CURRENT_SOURCE_DIR}/reference/cpp/trace_main.cpp"
+)
+target_link_libraries(pi_reference_trace PRIVATE pi::ai)
+
 picpp_add_sdk_consumer_test(
     test_ai_sdk
     "${CMAKE_CURRENT_SOURCE_DIR}/consumer/test_ai_sdk.cpp"
