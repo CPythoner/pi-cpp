@@ -24,9 +24,26 @@ endfunction()
 picpp_add_test(test_smoke "${CMAKE_CURRENT_SOURCE_DIR}/test_smoke.cpp" pi::ai)
 picpp_add_private_test(test_string "${CMAKE_CURRENT_SOURCE_DIR}/util/test_string.cpp" pi::ai)
 picpp_add_test(test_cancel_token "${CMAKE_CURRENT_SOURCE_DIR}/util/test_cancel_token.cpp" pi::ai)
+picpp_add_test(test_event_stream "${CMAKE_CURRENT_SOURCE_DIR}/ai/test_event_stream.cpp" pi::ai)
+picpp_add_test(test_provider "${CMAKE_CURRENT_SOURCE_DIR}/ai/test_provider.cpp" pi::ai)
+picpp_add_private_test(test_sse_parser "${CMAKE_CURRENT_SOURCE_DIR}/ai/test_sse_parser.cpp" pi::ai)
+picpp_add_private_test(test_streaming_json "${CMAKE_CURRENT_SOURCE_DIR}/ai/test_streaming_json.cpp" pi::ai)
+picpp_add_private_test(test_openai_request "${CMAKE_CURRENT_SOURCE_DIR}/ai/test_openai_request.cpp" pi::ai)
+picpp_add_private_test(test_openai_completions_decoder "${CMAKE_CURRENT_SOURCE_DIR}/ai/test_openai_completions_decoder.cpp" pi::ai)
+picpp_add_private_test(test_openai_tool_streaming "${CMAKE_CURRENT_SOURCE_DIR}/ai/test_openai_tool_streaming.cpp" pi::ai)
+picpp_add_private_test(test_openai_provider "${CMAKE_CURRENT_SOURCE_DIR}/ai/test_openai_provider.cpp" pi::ai)
+picpp_add_private_test(test_retry "${CMAKE_CURRENT_SOURCE_DIR}/ai/test_retry.cpp" pi::ai)
 picpp_add_private_test(test_thread_guard "${CMAKE_CURRENT_SOURCE_DIR}/util/test_thread_guard.cpp" pi::ai)
 picpp_add_test(test_message_json "${CMAKE_CURRENT_SOURCE_DIR}/agent/test_message_json.cpp" pi::agent)
 picpp_add_test(test_events_json "${CMAKE_CURRENT_SOURCE_DIR}/agent/test_events_json.cpp" pi::agent)
+
+# Compatibility trace producer. It is compiled on every platform but only
+# executed by the Linux reference workflow against the exact pi v0.80.0 checkout.
+add_executable(
+    pi_reference_trace
+    "${CMAKE_CURRENT_SOURCE_DIR}/reference/cpp/trace_main.cpp"
+)
+target_link_libraries(pi_reference_trace PRIVATE pi::ai)
 
 picpp_add_sdk_consumer_test(
     test_ai_sdk
@@ -46,5 +63,15 @@ picpp_add_sdk_consumer_test(
 
 add_test(NAME picpp_version COMMAND $<TARGET_FILE:picpp> --version)
 set_tests_properties(picpp_version PROPERTIES
-    PASS_REGULAR_EXPRESSION "^picpp v0\\.0\\.1"
+    PASS_REGULAR_EXPRESSION "^picpp v0\\.0\\.2"
+)
+
+add_test(NAME picpp_help COMMAND $<TARGET_FILE:picpp> --help)
+set_tests_properties(picpp_help PROPERTIES
+    PASS_REGULAR_EXPRESSION "Provider/SSE runtime through the pi::ai SDK"
+)
+
+add_test(NAME picpp_help_default COMMAND $<TARGET_FILE:picpp>)
+set_tests_properties(picpp_help_default PROPERTIES
+    PASS_REGULAR_EXPRESSION "Interactive agent CLI is planned for v0.1.0"
 )

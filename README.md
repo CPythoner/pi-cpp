@@ -51,13 +51,13 @@ pi::coding_agent
 
 | 版本 | 主题 | 状态 |
 |---|---|---|
-| v0.0.1 | 骨架 + 核心类型 + 三层 SDK 边界 | ✅ Final closeout 完成，tag 待重指向最终 commit |
-| v0.0.2 | Provider / SSE + 真实差分测试基座 | 待开始 |
+| v0.0.1 | 骨架 + 核心类型 + 三层 SDK 边界 | ✅ Final closeout 完成 |
+| v0.0.2 | Provider / SSE + 真实差分测试基座 | ✅ Final closeout 完成 |
 | v0.0.3 | Agent 主循环 | 待开始 |
 | v0.0.4 | coding-agent 工具四件套 | 待开始 |
 | v0.1.0 | print MVP + Stable Session Wire | 待开始 |
 
-完整路线见 [docs/dev-plan.md](docs/dev-plan.md)；v0.0.1 设计见 [docs/design/v0.0.1.md](docs/design/v0.0.1.md)，最终验收记录见 [docs/closeout/v0.0.1.md](docs/closeout/v0.0.1.md)。
+完整路线见 [docs/dev-plan.md](docs/dev-plan.md)；v0.0.2 设计与最终验收见 [docs/design/v0.0.2.md](docs/design/v0.0.2.md) 和 [docs/closeout/v0.0.2.md](docs/closeout/v0.0.2.md)；长期架构与工程方法见 [docs/README.md](docs/README.md)。
 
 ## 构建
 
@@ -71,17 +71,20 @@ ctest --preset release
 
 ```bash
 ./build/release/picpp --version
+./build/release/picpp --help
 ```
 
-输出：
+当前源码版本：
 
 ```text
-picpp v0.0.1
+picpp v0.0.2
 ```
+
+`v0.0.2` 已提供 `pi::ai` Provider / SSE SDK runtime，但 `picpp` 前端仍保持最小入口，只提供版本和帮助信息。交互式 Agent CLI / print MVP 按路线图在 `v0.1.0` 实现，避免在 Provider 基础版本提前冻结错误的 CLI 契约。
 
 ## 本地要求
 
 - CMake ≥ 3.25
 - 支持 C++17 的编译器（GCC / Clang / MSVC）
 
-当前依赖 nlohmann/json、fmt、doctest 由 CMake FetchContent 自动拉取。
+当前通过 CMake FetchContent 拉取 nlohmann/json、fmt、doctest 与 CPR；CPR/libcurl 只作为 `pi::ai` 的 private HTTP 实现依赖，不进入 public SDK API。
