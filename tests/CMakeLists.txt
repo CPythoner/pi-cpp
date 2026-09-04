@@ -65,3 +65,13 @@ add_test(NAME picpp_version COMMAND $<TARGET_FILE:picpp> --version)
 set_tests_properties(picpp_version PROPERTIES
     PASS_REGULAR_EXPRESSION "^picpp v0\\.0\\.2"
 )
+
+add_test(NAME picpp_help COMMAND $<TARGET_FILE:picpp> --help)
+set_tests_properties(picpp_help PROPERTIES
+    PASS_REGULAR_EXPRESSION "Provider/SSE runtime through the pi::ai SDK"
+)
+
+add_test(NAME picpp_help_default COMMAND $<TARGET_FILE:picpp>)
+set_tests_properties(picpp_help_default PROPERTIES
+    PASS_REGULAR_EXPRESSION "Interactive agent CLI is planned for v0.1.0"
+)
