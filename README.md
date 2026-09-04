@@ -57,7 +57,7 @@ pi::coding_agent
 | v0.0.4 | coding-agent 工具四件套 | 待开始 |
 | v0.1.0 | print MVP + Stable Session Wire | 待开始 |
 
-完整路线见 [docs/dev-plan.md](docs/dev-plan.md)；v0.0.2 设计与最终验收见 [docs/design/v0.0.2.md](docs/design/v0.0.2.md) 和 [docs/closeout/v0.0.2.md](docs/closeout/v0.0.2.md)；v0.0.1 记录见 [docs/design/v0.0.1.md](docs/design/v0.0.1.md) 和 [docs/closeout/v0.0.1.md](docs/closeout/v0.0.1.md)。
+完整路线见 [docs/dev-plan.md](docs/dev-plan.md)；v0.0.2 设计与最终验收见 [docs/design/v0.0.2.md](docs/design/v0.0.2.md) 和 [docs/closeout/v0.0.2.md](docs/closeout/v0.0.2.md)；长期架构与工程方法见 [docs/README.md](docs/README.md)。
 
 ## 构建
 
@@ -71,13 +71,16 @@ ctest --preset release
 
 ```bash
 ./build/release/picpp --version
+./build/release/picpp --help
 ```
 
-当前源码构建输出：
+当前源码版本：
 
 ```text
 picpp v0.0.2
 ```
+
+`v0.0.2` 已提供 `pi::ai` Provider / SSE SDK runtime，但 `picpp` 前端仍保持最小入口，只提供版本和帮助信息。交互式 Agent CLI / print MVP 按路线图在 `v0.1.0` 实现，避免在 Provider 基础版本提前冻结错误的 CLI 契约。
 
 ## 本地要求
 
