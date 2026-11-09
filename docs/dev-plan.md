@@ -277,50 +277,59 @@ target_link_libraries(app PRIVATE pi::coding-agent)
 
 ### v0.0.2 — Provider / SSE + Differential 基座
 
+**状态：✅ Final closeout 完成（2026-09-03）**
+
 **目标：** 在已经稳定的 `ai` SDK 边界内打通第一条真实 Provider 流，同时建立后续版本共同使用的 pi `v0.80.0` compatibility gate。
 
 #### T0：真实兼容基座
 
-- [ ] 固定 pi `v0.80.0` tag/commit，采集 message/event/session 真实 fixtures。
-- [ ] `tests/fixtures/pi-v0.80.0/` 记录 fixture 来源和生成脚本。
-- [ ] 最小 TS reference harness：确定性输入 → normalized `trace.jsonl`。
-- [ ] C++ 同输入 → normalized trace。
-- [ ] 比较 event ordering、message fields、stopReason、tool-call 聚合等稳定字段。
-- [ ] UUID/time/duration/path 等非确定字段只允许显式 normalization。
-- [ ] Tau fixture 仅辅助回归。
+- [x] 固定 pi `v0.80.0` tag/commit：`f08e968c83d92bce5f5fd2f7f20ef37f8cf04a39`。
+- [x] `tests/fixtures/pi-v0.80.0/README.md` 记录 upstream、生成命令与 normalization 边界。
+- [x] exact pi source runner：确定性 local HTTP/SSE 输入 → normalized JSONL。
+- [x] C++ public `OpenAICompatibleProvider` 使用同一输入 → normalized JSONL。
+- [x] canonical `text-stop` / `tool-call` / `length-stop` traces 固化。
+- [x] checked-in canonical fixture == fresh pi v0.80.0 == pi-cpp 三方 strict gate。
+- [x] event ordering、partial message state、stopReason、usage、tool-call 聚合等稳定字段严格比较。
+- [x] 非确定字段只允许显式 allow-list normalization；稳定业务字段不得隐藏。
+- [x] Tau fixture 仅辅助回归，不作为 canonical compatibility evidence。
+
+**范围说明：** v0.0.2 的 real differential canonical proof 聚焦 OpenAI-compatible L1 streaming。Session wire/tree/compaction 仍按 v0.1.0–v0.1.2 计划实现，不为了勾选 T0 在本版本伪造 session fixtures。
 
 #### T1：CancellationToken 加固
 
-- [ ] request 锁内只做 cancelled transition + callback snapshot/detach。
-- [ ] 用户 callback 锁外执行。
-- [ ] register-after-cancel 不在内部锁下调用用户代码。
-- [ ] unregister/request/destructor race 明确定义并测试。
-- [ ] CombinedCancellation 无 UAF / deadlock。
+- [x] request 锁内只做 cancelled transition + callback snapshot/detach。
+- [x] 用户 callback 锁外执行。
+- [x] register-after-cancel 不在内部锁下调用用户代码。
+- [x] unregister/request race 明确定义并测试。
+- [x] CombinedCancellation source request/destructor stress 无 UAF / deadlock。
 
 #### T2：ai Provider API / EventStream
 
-- [ ] `<pi/ai/provider.hpp>`：Provider streaming interface。
-- [ ] `<pi/ai/event_stream.hpp>`：thread-safe producer/consumer event stream。
-- [ ] FakeProvider test support。
-- [ ] 第三方 HTTP 类型不进入 public API。
+- [x] `<pi/ai/provider.hpp>`：Provider streaming interface。
+- [x] `<pi/ai/event_stream.hpp>`：thread-safe producer/consumer event stream。
+- [x] FakeProvider test support。
+- [x] `<pi/ai/openai_compatible.hpp>` public Provider facade + PImpl。
+- [x] 第三方 HTTP 类型不进入 public API。
 
 #### T3：OpenAI-compatible SSE
 
-- [ ] `src/ai/http.cpp`：cpr/curl private adapter。
-- [ ] connect timeout / low-speed / cancel semantics。
-- [ ] `openai_compatible.cpp`：request + SSE parsing。
-- [ ] delta merge：text / thinking / tool_calls index。
-- [ ] finish_reason → StopReason。
-- [ ] usage capture。
-- [ ] malformed JSON、跨 chunk、多 data 行、`[DONE]`、取消测试。
-- [ ] retry/backoff/jitter/Retry-After/错误分类。
+- [x] `src/ai/http.cpp`：CPR/libcurl private streaming adapter。
+- [x] connect timeout / total timeout / low-speed / cancellation semantics。
+- [x] request builder + 独立 SSE parser + streaming JSON parser。
+- [x] delta merge：text / thinking / tool_calls index/id/name/partial arguments。
+- [x] finish_reason → StopReason。
+- [x] usage / response id / response model capture。
+- [x] malformed JSON、跨 chunk、多 data 行、`[DONE]`、取消测试。
+- [x] retry/backoff/jitter/Retry-After/`retry-after-ms`/`x-should-retry`/错误分类。
+- [x] 408 / 409 / 429 / 5xx / transport / cancel 路径有确定性测试。
 
 **验收：**
 
-1. OpenAI-compatible endpoint 能真实增量输出。
-2. 401/429/5xx/断网/取消不导致 Agent 进程异常退出。
-3. 至少一组真实 pi normalized trace 与 C++ trace 一致。
-4. `pi::ai` 可被独立 consumer 使用，不依赖 agent/coding-agent。
+1. [x] OpenAI-compatible public Provider 通过真实本地 HTTP/SSE 增量链路验证。
+2. [x] 401/429/5xx/transport/cancel 以 terminal result/error 收尾，不因普通 Provider 错误终止进程。
+3. [x] 三组 canonical trace 与 fresh exact pi `v0.80.0`、pi-cpp 三方一致。
+4. [x] `pi::ai` 可被独立 consumer 使用，不依赖 agent/coding-agent。
+5. [x] Linux/macOS/Windows CI 与 exact pi Compatibility workflow 全绿。
 
 ---
 

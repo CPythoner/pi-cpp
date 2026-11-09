@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.25)
 
-project(picpp VERSION 0.0.1 LANGUAGES CXX)
+project(picpp VERSION 0.0.2 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -17,10 +17,17 @@ endif()
 
 configure_file(cmake/version.h.in "${CMAKE_CURRENT_BINARY_DIR}/generated/version.h" @ONLY)
 
-# ai SDK：LLM message/content、L1 provider events，以及后续 Provider/EventStream。
+# ai SDK：LLM message/content、L1 provider events，以及 v0.0.2 起的 Provider/EventStream。
 add_library(pi_ai STATIC
     src/ai/message.cpp
     src/ai/events.cpp
+    src/ai/sse_parser.cpp
+    src/ai/streaming_json.cpp
+    src/ai/openai_request.cpp
+    src/ai/openai_completions_decoder.cpp
+    src/ai/openai_provider.cpp
+    src/ai/http.cpp
+    src/ai/retry.cpp
     src/util/string.cpp
 )
 add_library(pi::ai ALIAS pi_ai)
@@ -30,7 +37,10 @@ target_include_directories(pi_ai
     PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/src"
 )
-target_link_libraries(pi_ai PUBLIC nlohmann_json)
+target_link_libraries(pi_ai
+    PUBLIC nlohmann_json
+    PRIVATE cpr::cpr
+)
 
 # agent SDK：AgentMessage、L2 AgentEvent；v0.0.3 起加入 Agent/runLoop/tool abstraction。
 add_library(pi_agent STATIC
@@ -46,7 +56,7 @@ target_include_directories(pi_agent
 )
 target_link_libraries(pi_agent PUBLIC pi::ai)
 
-# coding-agent SDK：v0.0.4 起加入 coding tools；v0.0.1 先冻结依赖与 public include 边界。
+# coding-agent SDK：v0.0.4 起加入 coding tools；v0.0.1 已冻结依赖与 public include 边界。
 add_library(pi_coding_agent INTERFACE)
 add_library(pi::coding-agent ALIAS pi_coding_agent)
 target_include_directories(pi_coding_agent

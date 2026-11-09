@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "scenarios": {
+    "text-stop": {
+      "description": "Two text deltas, usage, and a normal stop.",
+      "chunks": [
+        "data: {\"id\":\"resp-text\",\"model\":\"gpt-ref\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hel\"},\"finish_reason\":null}]}\n\n",
+        "data: {\"id\":\"resp-text\",\"model\":\"gpt-ref\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"lo\"},\"finish_reason\":\"stop\"}]}\n\n",
+        "data: {\"id\":\"resp-text\",\"model\":\"gpt-ref\",\"choices\":[],\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":2,\"prompt_tokens_details\":{\"cached_tokens\":2}}}\n\n",
+        "data: [DONE]\n\n"
+      ]
+    },
+    "tool-call": {
+      "description": "A tool call whose JSON arguments are split across two deltas.",
+      "chunks": [
+        "data: {\"id\":\"resp-tool\",\"model\":\"gpt-ref\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call-1\",\"type\":\"function\",\"function\":{\"name\":\"read\",\"arguments\":\"{\\\"path\\\":\\\"READ\"}}]},\"finish_reason\":null}]}\n\n",
+        "data: {\"id\":\"resp-tool\",\"model\":\"gpt-ref\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"ME.md\\\"}\"}}]},\"finish_reason\":\"tool_calls\"}]}\n\n",
+        "data: [DONE]\n\n"
+      ]
+    },
+    "length-stop": {
+      "description": "A text delta terminated by finish_reason=length.",
+      "chunks": [
+        "data: {\"id\":\"resp-length\",\"model\":\"gpt-ref\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"cut\"},\"finish_reason\":\"length\"}]}\n\n",
+        "data: [DONE]\n\n"
+      ]
+    }
+  }
+}
